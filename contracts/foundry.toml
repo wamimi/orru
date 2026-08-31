@@ -1,0 +1,52 @@
+# Orru — Foundry workspace
+#
+# This configuration mirrors the config proven working on Creditcoin testnet
+# during the 19 August 2026 Attestcoin + Noir smoke test. Do not change
+# solc_version, optimizer_runs, bytecode_hash or via_ir without re-running that
+# end-to-end test — each of these was load-bearing.
+
+[profile.default]
+src     = "src"
+out     = "out"
+test    = "test"
+script  = "script"
+
+# "node_modules" is required: @gluwa/usc-contracts ships Solidity source
+# (EvmV1Decoder.sol) that AttestationRegistry links against.
+libs    = ["lib", "node_modules"]
+
+# The Barretenberg-generated HonkVerifier declares ^0.8.27. Pinning the whole
+# workspace there keeps one compiler across app contracts and the verifier.
+solc_version = "0.8.27"
+
+# optimizer_runs = 1 and bytecode_hash = "none" are NOT stylistic. At runs = 200
+# the generated HonkVerifier is ~24,635 bytes — 59 bytes over the EIP-170 limit
+# of 24,576 and undeployable. These settings brought it to 23,675 bytes.
+optimizer      = true
+optimizer_runs = 1
+bytecode_hash  = "none"
+
+# via_ir MUST stay false. Enabling it fails compilation of the generated
+# verifier with a Yul "variable is 1 too deep" stack exception.
+via_ir = false
+
+# Fail the build rather than silently ship an undeployable verifier.
+deny_warnings = false
+
+# Deploy scripts record addresses to deployments/<chainid>.json. Shell history is
+# not a deployment record.
+fs_permissions = [{ access = "read-write", path = "./deployments" }]
+
+[profile.default.fuzz]
+runs = 512
+
+[profile.ci.fuzz]
+runs = 5000
+
+[rpc_endpoints]
+sepolia      = "${SEPOLIA_RPC_URL}"
+base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
+creditcoin   = "${CREDITCOIN_RPC_URL}"
+
+[etherscan]
+sepolia = { key = "${ETHERSCAN_API_KEY}", chain = 11155111 }

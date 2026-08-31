@@ -1,0 +1,22 @@
+{
+  "name": "@orru/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Orru — Foundry workspace. Solidity dependencies resolved from node_modules via foundry.toml libs.",
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test",
+    "sizes": "forge build --sizes"
+  },
+  "dependencies": {
+    "@gluwa/usc-contracts": "0.1.2",
+    "@gluwa/usc-sdk": "0.18.0",
+    "@openzeppelin/contracts": "5.1.0",
+    "ethers": "^6.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
