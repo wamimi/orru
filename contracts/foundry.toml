@@ -26,6 +26,18 @@ optimizer      = true
 optimizer_runs = 1
 bytecode_hash  = "none"
 
+# Creditcoin testnet block headers omit prevRandao, which makes `forge script`
+# fail against it. Confirmed by the Creditcoin team (BUIDL CTC Q10), who
+# recommend this key.
+#
+# UNVERIFIED on forge 1.2.3: `forge config` neither echoes nor rejects it, so it
+# may be silently ignored by this version. Do not rely on it. The PROVEN path
+# for Creditcoin is `forge create`, which is what the 19 Aug smoke test used for
+# every Creditcoin deployment — almost certainly for this exact reason. Use
+# `forge script` for Sepolia and `forge create` for Creditcoin until this is
+# confirmed on a newer forge.
+bypass_prevrandao = true
+
 # via_ir MUST stay false. Enabling it fails compilation of the generated
 # verifier with a Yul "variable is 1 too deep" stack exception.
 via_ir = false
