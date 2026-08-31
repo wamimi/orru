@@ -1,0 +1,66 @@
+name: payroll
+
+# Runs DemoPayroll on Ethereum Sepolia so payment history accrues without a
+# laptop staying awake. Hourly against four-hour periods: three of four firings
+# are expected to skip, and that redundancy is the point — producing a gap in
+# the period sequence needs four consecutive failures, and a gap can never be
+# backfilled.
+#
+# GitHub's scheduler is best-effort and can run late or occasionally skip under
+# load. The 4x redundancy absorbs that. Manual runs are always available.
+on:
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: payroll
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Settle the due period, if any
+        env:
+          RPC: ${{ secrets.SEPOLIA_RPC_URL }}
+          PAYROLL: ${{ secrets.DEMO_PAYROLL_ADDRESS }}
+          KEEPER_PK: ${{ secrets.KEEPER_PRIVATE_KEY }}
+        run: |
+          set -uo pipefail
+
+          current=$(cast call "$PAYROLL" "currentPeriod()(uint256)"  --rpc-url "$RPC" | awk '{print $1}')
+          next=$(cast call    "$PAYROLL" "nextDuePeriod()(uint256)"  --rpc-url "$RPC" | awk '{print $1}')
+          last=$(cast call    "$PAYROLL" "lastPaidPeriod()(uint256)" --rpc-url "$RPC" | awk '{print $1}')
+          short=$(cast call   "$PAYROLL" "fundingShortfall()(uint256)" --rpc-url "$RPC" | awk '{print $1}')
+
+          echo "currentPeriod=$current nextDue=$next lastPaid=$last shortfall=$short"
+
+          if [ "$short" != "0" ]; then
+            echo "::warning::Underfunded by $short USDC base units (6dp). Top up DemoPayroll — periods are at risk."
+          fi
+
+          if [ "$next" -gt "$current" ]; then
+            echo "Nothing due yet (next $next > current $current). Skipping."
+            exit 0
+          fi
+
+          echo "Settling period $next..."
+          cast send "$PAYROLL" "runPayroll()" \
+            --rpc-url "$RPC" \
+            --private-key "$KEEPER_PK" \
+            --json | tee result.json
+
+          status=$(python3 -c "import json;print(json.load(open('result.json')).get('status',''))")
+          echo "status=$status"
+          [ "$status" = "0x1" ] || { echo "::error::runPayroll reverted"; exit 1; }
+
+      - name: Report
+        if: failure()
+        run: echo "::error::Payroll run failed. A period is at risk — check the contract and the keeper balance."
