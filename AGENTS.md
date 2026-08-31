@@ -62,6 +62,50 @@ require(verifier.verify(proof, pub), "bad proof");
 
 Requiring two unrelated booleans is not composition. The binding is the security.
 
+## The write layer — direction, shape, and what it does NOT give you
+
+**Creditcoin → client chain only.** The write layer sends messages *out* to
+Ethereum and other programmable chains. It never receives them. Anything flowing
+*into* Creditcoin is readability.
+
+```
+user → dApp (source) → Outbox ─── Relayer (optional) ───▶ Inbox → Receiver → dApp
+```
+
+```solidity
+interface IMessageReceiver {
+    function receiveMessage(
+        bytes32 messageId,      // unique per message
+        uint256 chainId,        // which Creditcoin network sent it
+        address emitterAddress, // the contract that sent it on Creditcoin L1
+        bytes calldata payload  // dApp-specific; ABI for EVM→EVM
+    ) external;
+}
+```
+
+**Never let the application trust the Inbox directly.** Put an adapter between
+them: the receiver checks `msg.sender == inbox`, the application checks
+`onlyReceiver`. This is what lets a mock inbox be swapped for the real one by
+replacing the receiver alone, and it is how we can build and demo the seam before
+writability ships.
+
+What the protocol does NOT do for you:
+
+- **Validate `emitterAddress` yourself** against a trusted source set. This is
+  the write-layer twin of TRUSTED-SOURCE: the protocol proves who sent it, the
+  application decides whether that sender counts.
+- **Ordering is not guaranteed** — delivery depends on sponsorship. If you need
+  ordering, put a sequence number inside your payload and enforce it.
+- **Design for reentrancy.** Delivery calls into your contract.
+- **The payload is opaque** to the protocol. The outbox does not validate it.
+
+What it DOES give you: **replay protection**. The inbox refuses to deliver the
+same message twice, from any sender. That is one thing not to rebuild.
+
+**Build the cross-chain surface for change** — upgradeable, or several composing
+contracts. v2 features are expected. This does not apply to `PayerAnchor`, which
+is deliberately immutable because it is a trust root.
+
 ## Hard constraints — non-negotiable
 
 - **Attestcoin reads Ethereum only.** No Base, Polygon, Arbitrum, Optimism,
@@ -77,8 +121,20 @@ Requiring two unrelated booleans is not composition. The binding is the security
   It does *not* check that the source transaction succeeded and does *not*
   interpret it. The application contract must check receipt status itself. A
   reverted transaction is still "included".
-- **Attestcoin writability is NOT live** (in third-party audit). An interface stub
-  is fine; a dependency is not. Phase 1 must be genuinely useful on its own.
+- **Attestcoin writability is NOT live and is NOT shipping during the hackathon.**
+  Confirmed by the Creditcoin team: no testnet writability in this window, and no
+  official Outbox/Inbox interfaces, mock inbox, example receivers or test vectors
+  either. An interface stub is fine; a dependency is not. Phase 1 must be
+  genuinely useful on its own. See "The write layer" below for the real shape.
+- **Payer identity is `topics[1]`, never `from`.** `from` is the *gas payer*,
+  which differs for router, relayer, multisig, smart-account and EIP-7702 flows.
+  Reading `from` would attribute income to whoever paid gas — silent, and it
+  looks like a registry bug when it surfaces.
+- **`forge script` fails against Creditcoin testnet** — its block headers omit
+  `prevRandao`. `bypass_prevrandao = true` is set in `foundry.toml` but is
+  UNVERIFIED on forge 1.2.3. **Use `forge script` for Sepolia and `forge create`
+  for Creditcoin**, which is what the proven 19 Aug pipeline did for every
+  Creditcoin deployment.
 - **Verification cost rises with event age** — roughly 10x after 24 hours. Process
   events while fresh.
 - **USDC has 6 decimals, not 18.** 100 USDC is `100000000`. This is a likely bug.
