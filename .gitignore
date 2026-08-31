@@ -44,3 +44,61 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# ---------------------------------------------------------------------------
+# Orru — Foundry, Noir, and agent tooling
+# NOTE: entries below are intentionally NOT root-anchored (no leading slash),
+# so they match at any depth. The Next.js block above uses /out/, /node_modules
+# etc., which would NOT catch contracts/out or contracts/node_modules.
+# ---------------------------------------------------------------------------
+
+# Foundry build artifacts (contracts/)
+out/
+cache/
+broadcast/
+artifacts/
+
+# Foundry dependencies are COMMITTED (lib/forge-std), installed with
+# `forge install --no-git` so no git submodule is added to the parent repo.
+# A fresh clone must build with no undocumented bootstrap step.
+
+# npm inside contracts/ (@gluwa/usc-contracts is a Solidity source dependency)
+node_modules/
+
+# Noir / Barretenberg build output (circuits/**)
+target/
+*.gz
+
+# Local Foundry / deploy state
+.env.*
+!.env.example
+cache_hardhat/
+
+# Agent tooling
+.claude/skills/
+
+# Audit skill output (pashov/skills)
+x-ray/
+fizz_data/
+
+# ---------------------------------------------------------------------------
+# Not for the remote
+# ---------------------------------------------------------------------------
+
+# Audit output — contains UNFIXED findings and exploit traces. Must not be
+# public before the deadline, and ideally not after without a re-review.
+contracts/audit-report.md
+contracts/.audit-*/
+*-pashov-ai-audit-report-*.md
+
+# Internal strategy, specs and handoffs — competitive analysis, cut order,
+# disclosure list. Kept local.
+#
+# NOTE: this is `docs/*`, not `docs/`. Git cannot re-include a file whose parent
+# DIRECTORY is excluded, so excluding the contents is what makes the negation
+# below work at all.
+docs/*
+
+# ...except the one document the frontend is built against. Delete this line if
+# the whole docs tree should stay local.
+!docs/FRONTEND-INTEGRATION.md
