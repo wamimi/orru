@@ -50,7 +50,7 @@ function ContourField() {
 
 export default function Home() {
   return (
-    <main className="hero-wash relative isolate min-h-svh overflow-hidden text-paper">
+    <main className="waitlist-shell hero-wash relative isolate min-h-svh overflow-hidden text-paper">
       <ContourField />
       <div className="relative z-10 mx-auto flex min-h-svh w-full max-w-3xl flex-col items-center justify-center px-6 py-16 text-center">
         <p className="animate-rise font-display text-[clamp(3.4rem,14vw,7.5rem)] font-extrabold leading-[0.9] tracking-[-0.04em] text-paper">

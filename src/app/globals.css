@@ -1,64 +1,293 @@
 @import "tailwindcss";
 
-:root {
-  --ink: #071a1c;
-  --surface: #0d2b2e;
-  --surface-raised: #14383c;
-  --fog: #8a9a9a;
-  --mist: #b7c4c4;
-  --paper: #f4f7f4;
-  --accent: #c2d54e;
-  --accent-deep: #a8b83a;
-  --line: rgba(194, 213, 78, 0.18);
-  --glow: rgba(194, 213, 78, 0.12);
-}
-
 @theme inline {
+  --color-canvas: var(--canvas);
+  --color-canvas-raised: var(--canvas-raised);
+  --color-paper: var(--paper);
+  --color-night: var(--night);
+  --color-night-raised: var(--night-raised);
+
   --color-ink: var(--ink);
-  --color-surface: var(--surface);
-  --color-surface-raised: var(--surface-raised);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-on-night: var(--on-night);
+  --color-on-night-soft: var(--on-night-soft);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-signal: var(--signal);
+
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-rule-night: var(--rule-night);
+
   --color-fog: var(--fog);
   --color-mist: var(--mist);
-  --color-paper: var(--paper);
   --color-accent: var(--accent);
   --color-accent-deep: var(--accent-deep);
-  --color-line: var(--line);
-  --color-glow: var(--glow);
+  --color-surface: var(--surface);
+
+  --font-display: var(--font-archivo);
+  --font-sans: var(--font-instrument-sans);
+  --font-mono: var(--font-jetbrains-mono);
+
+  --radius-control: 6px;
+  --radius-card: 10px;
+}
+
+/*
+ * Like `transition-colors` but without `outline-color`. Tailwind's version
+ * animates the focus ring in from currentColor, which briefly hides it on
+ * solid-filled controls.
+ */
+@utility transition-tone {
+  transition-property: color, background-color, border-color,
+    text-decoration-color, fill, stroke;
+  transition-timing-function: var(
+    --tw-ease,
+    var(--default-transition-timing-function)
+  );
+  transition-duration: var(--tw-duration, var(--default-transition-duration));
+}
+
+:root {
+  /* Surfaces */
+  --canvas: #f4f2ec;
+  --canvas-raised: #faf9f5;
+  --paper: #ffffff;
+  --night: #0e2521;
+  --night-raised: #143029;
+
+  /* Type — ink-soft is 6.5:1 and ink-faint 4.6:1 against --canvas */
+  --ink: #12302b;
+  --ink-soft: #4e5a52;
+  --ink-faint: #67716b;
+  --on-night: #eef0e8;
+  --on-night-soft: #9aa89f;
+
+  /* Brand */
+  --brand: #1f4a2c;
+  --brand-hover: #173a21;
+  --signal: #c2d54e;
+
+  /* Structure */
+  --rule: rgba(18, 48, 43, 0.1);
+  --rule-strong: rgba(18, 48, 43, 0.18);
+  --rule-night: rgba(238, 240, 232, 0.14);
+
+  /* Evidence states */
+  --ev-verified-bg: #e9f0e8;
+  --ev-verified-fg: #2f5b33;
+  --ev-attested-bg: #e4eef2;
+  --ev-attested-fg: #1f5b6c;
+  --ev-found-bg: #efeee9;
+  --ev-found-fg: #61685f;
+  --ev-pending-bg: #f8f1dc;
+  --ev-pending-fg: #8a5d00;
+  --ev-failed-bg: #faeaea;
+  --ev-failed-fg: #9a2f2d;
+
+  /* Waitlist homepage (scoped via .waitlist-shell) */
+  --fog: #8a9a9a;
+  --mist: #b7c4c4;
+  --accent: #c2d54e;
+  --accent-deep: #a8b83a;
+  --surface: #0d2b2e;
+}
+
+/*
+ * Everything below is layered on purpose. Unlayered rules outrank every
+ * Tailwind utility, so a bare `a { color: inherit }` would silently beat
+ * `text-canvas` on a link-styled button.
+ */
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans), system-ui, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+
+  ::selection {
+    background: rgba(31, 74, 44, 0.2);
+    color: var(--ink);
+  }
+}
+
+@layer components {
+  /*
+   * Focus rings live in the components layer so the colour cannot be pulled
+   * back to currentColor by a base-layer reset — a cream ring on a cream page
+   * is an invisible focus ring.
+   */
+  :focus-visible {
+    outline-width: 2px;
+    outline-style: solid;
+    outline-color: var(--brand);
+    outline-offset: 3px;
+    border-radius: 3px;
+  }
+
+  /* Dark passages remap the tokens so children need no special casing */
+  .on-night {
+    background: var(--night);
+    color: var(--on-night);
+    --ink: var(--on-night);
+    --ink-soft: var(--on-night-soft);
+    --ink-faint: var(--on-night-soft);
+    --rule: var(--rule-night);
+    --rule-strong: rgba(238, 240, 232, 0.28);
+    --paper: var(--night-raised);
+    --canvas-raised: var(--night-raised);
+  }
+
+  .on-night :focus-visible {
+    outline-color: var(--signal);
+  }
+
+  .display-xl {
+    font-family: var(--font-display), sans-serif;
+    font-weight: 600;
+    font-size: clamp(2.75rem, 7.5vw, 6rem);
+    line-height: 0.96;
+    letter-spacing: -0.045em;
+  }
+
+  .display-lg {
+    font-family: var(--font-display), sans-serif;
+    font-weight: 600;
+    font-size: clamp(2rem, 4.4vw, 3.35rem);
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+  }
+
+  .display-md {
+    font-family: var(--font-display), sans-serif;
+    font-weight: 600;
+    font-size: clamp(1.5rem, 2.4vw, 1.9rem);
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+  }
+
+  .display-sm {
+    font-family: var(--font-display), sans-serif;
+    font-weight: 600;
+    font-size: 1.1rem;
+    line-height: 1.3;
+    letter-spacing: -0.015em;
+  }
+
+  .eyebrow {
+    font-family: var(--font-sans), sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    line-height: 1.4;
+    text-transform: uppercase;
+  }
+
+  .meta {
+    font-family: var(--font-mono), monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.01em;
+  }
+}
+
+/* Motion stays unlayered: no utility should be able to unhide a revealing element */
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes signal-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes contour-drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-1.5%, 1%, 0);
+  }
+}
+
+/* Above-the-fold entrance, plays once on load */
+.intro {
+  animation: reveal-up 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--intro-delay, 0ms);
+}
+
+/*
+ * Below-the-fold reveals are tied to scroll position, not to a timer or an
+ * observer. Browsers without scroll timelines skip the rule and render the
+ * content plainly, so nothing can end up permanently invisible.
+ */
+@supports (animation-timeline: view()) {
+  .reveal {
+    animation: reveal-up linear both;
+    animation-timeline: view();
+    animation-range: entry calc(var(--reveal-order, 0) * 11%)
+      entry calc(58% + var(--reveal-order, 0) * 11%);
+  }
+}
+
+.signal-dot {
+  animation: signal-pulse 2.6s ease-in-out infinite;
+}
+
+.contour-drift {
+  animation: contour-drift 24s ease-in-out infinite alternate;
+}
+
+.waitlist-shell {
+  --ink: #071a1c;
+  --paper: #f4f7f4;
   --font-display: var(--font-syne);
   --font-sans: var(--font-dm-sans);
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html {
-  scroll-behavior: smooth;
-}
-
-body {
-  margin: 0;
-  min-height: 100vh;
-  background: var(--surface);
   color: var(--paper);
   font-family: var(--font-sans), sans-serif;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
 }
 
-::selection {
-  background: color-mix(in srgb, var(--accent) 45%, transparent);
-  color: var(--ink);
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-button,
-input {
-  font: inherit;
+.hero-wash {
+  background:
+    radial-gradient(ellipse 70% 55% at 15% 20%, rgba(194, 213, 78, 0.09), transparent 55%),
+    radial-gradient(ellipse 55% 45% at 85% 10%, rgba(122, 168, 160, 0.14), transparent 50%),
+    linear-gradient(165deg, #0f3336 0%, #0d2b2e 42%, #091f22 100%);
 }
 
 @keyframes rise {
@@ -69,27 +298,6 @@ input {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes drift {
-  from {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  to {
-    transform: translate3d(-2%, 1.5%, 0) scale(1.04);
-  }
-}
-
-@keyframes pulse-dot {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.55;
-    transform: scale(0.85);
   }
 }
 
@@ -109,21 +317,33 @@ input {
   animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.36s both;
 }
 
-.contour-drift {
-  animation: drift 18s ease-in-out infinite alternate;
+@media print {
+  .intro,
+  .reveal {
+    animation: none !important;
+  }
 }
 
-.live-dot {
-  animation: pulse-dot 2.4s ease-in-out infinite;
-}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 
-.hero-wash {
-  background:
-    radial-gradient(ellipse 70% 55% at 15% 20%, rgba(194, 213, 78, 0.09), transparent 55%),
-    radial-gradient(ellipse 55% 45% at 85% 10%, rgba(122, 168, 160, 0.14), transparent 50%),
-    linear-gradient(165deg, #0f3336 0%, #0d2b2e 42%, #091f22 100%);
-}
+  .intro,
+  .reveal,
+  .signal-dot,
+  .contour-drift,
+  .animate-rise,
+  .animate-rise-delay-1,
+  .animate-rise-delay-2,
+  .animate-rise-delay-3,
+  .animate-spin {
+    animation: none;
+  }
 
-.section-rule {
-  border-top: 1px solid rgba(183, 196, 196, 0.12);
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
 }
