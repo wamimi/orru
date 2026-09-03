@@ -4,11 +4,15 @@ import { useCallback, useEffect, useState } from "react";
 
 const KEY = "orru.flow";
 
+import type { IncomeLookup } from "@/lib/income-types";
+
 export type FlowSession = {
   connected: boolean;
   signed: boolean;
   requestId: string | null;
   address: string | null;
+  sessionToken: string | null;
+  income: IncomeLookup | null;
 };
 
 const empty: FlowSession = {
@@ -16,6 +20,8 @@ const empty: FlowSession = {
   signed: false,
   requestId: null,
   address: null,
+  sessionToken: null,
+  income: null,
 };
 
 export function useFlowSession() {

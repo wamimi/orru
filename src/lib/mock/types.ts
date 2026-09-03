@@ -21,6 +21,9 @@ export type Payment = {
   payer: string;
   recognised: boolean;
   evidence: EvidenceState;
+  sourceChain?: string;
+  sourceTx?: `0x${string}`;
+  verifiedTx?: `0x${string}` | null;
 };
 
 export type IssuedCredential = CredentialData & {

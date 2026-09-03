@@ -2,7 +2,13 @@ import type { EvidenceState } from "@/components/ui/EvidenceBadge";
 import { demoPayments, unrecognisedPayments } from "./mock/payments";
 import type { Payment, Recovery } from "./mock/types";
 
-export type ReviewScenario = "happy" | "empty" | "unrecognised" | "failed";
+export type ReviewScenario =
+  | "happy"
+  | "empty"
+  | "unrecognised"
+  | "failed"
+  | "gap"
+  | "short";
 
 export type StageId = "find" | "confirm" | "pattern";
 
@@ -37,14 +43,21 @@ const STAGE_COPY: Record<StageId, { title: string; body: string }> = {
   },
 };
 
-const FIND_DONE = 700;
-const CONFIRM_START = 900;
-const CONFIRM_STEP = 650;
-const PATTERN_LEAD = 400;
-const PATTERN_DONE = 800;
+const FIND_DONE = 500;
+const CONFIRM_START = 650;
+const CONFIRM_STEP = 350;
+const PATTERN_LEAD = 250;
+const PATTERN_DONE = 500;
 
 function clonePayments(source: Payment[], evidence: EvidenceState): Payment[] {
   return source.map((payment) => ({ ...payment, evidence }));
+}
+
+function settledEvidence(payment: Payment): EvidenceState {
+  if (!payment.recognised) return "failed";
+  if (payment.verifiedTx) return "verified";
+  if (payment.sourceTx) return "found";
+  return "verified";
 }
 
 function stages(
@@ -59,11 +72,19 @@ function stages(
   }));
 }
 
+function defaultSource(scenario: ReviewScenario): Payment[] {
+  if (scenario === "unrecognised") return unrecognisedPayments;
+  return demoPayments;
+}
+
 /**
- * Clock-driven review snapshot. Phase 2 feeds elapsed milliseconds from a
- * client ticker; live jobs later feed the same shape from worker status.
+ * Clock-driven review snapshot. Live lookups pass real rows; QA uses mocks.
  */
-export function reviewAt(elapsedMs: number, scenario: ReviewScenario): ReviewSnapshot {
+export function reviewAt(
+  elapsedMs: number,
+  scenario: ReviewScenario,
+  source: Payment[] = defaultSource(scenario),
+): ReviewSnapshot {
   if (scenario === "empty") {
     if (elapsedMs < FIND_DONE) {
       return {
@@ -106,8 +127,7 @@ export function reviewAt(elapsedMs: number, scenario: ReviewScenario): ReviewSna
     };
   }
 
-  const source = scenario === "unrecognised" ? unrecognisedPayments : demoPayments;
-  const confirmWindow = source.length * CONFIRM_STEP;
+  const confirmWindow = Math.max(source.length, 1) * CONFIRM_STEP;
 
   if (elapsedMs < FIND_DONE) {
     return {
@@ -134,6 +154,9 @@ export function reviewAt(elapsedMs: number, scenario: ReviewScenario): ReviewSna
     const payments = source.map((payment, index) => {
       if (index >= confirmed) return { ...payment, evidence: "found" as const };
       if (!payment.recognised) return { ...payment, evidence: "failed" as const };
+      if (payment.sourceTx && !payment.verifiedTx) {
+        return { ...payment, evidence: "found" as const };
+      }
       return { ...payment, evidence: "attested" as const };
     });
     return {
@@ -145,7 +168,13 @@ export function reviewAt(elapsedMs: number, scenario: ReviewScenario): ReviewSna
 
   const confirmedPayments = source.map((payment) =>
     payment.recognised
-      ? { ...payment, evidence: "attested" as const }
+      ? {
+          ...payment,
+          evidence:
+            payment.sourceTx && !payment.verifiedTx
+              ? ("found" as const)
+              : ("attested" as const),
+        }
       : { ...payment, evidence: "failed" as const },
   );
 
@@ -155,10 +184,38 @@ export function reviewAt(elapsedMs: number, scenario: ReviewScenario): ReviewSna
       payments: confirmedPayments,
       canContinue: false,
       recovery: {
-        title: "A sender is not recognised",
-        body: "A payment arrived from an address we do not treat as a payer. It cannot count toward the band.",
-        actionLabel: "Review the payments",
-        actionHref: "/review",
+        title: "We could not recognise who paid you",
+        body: "Orru only counts payments from employers, platforms and grant programmes.",
+        actionLabel: "Use a different address",
+        actionHref: "/connect",
+      },
+    };
+  }
+
+  if (scenario === "gap") {
+    return {
+      stages: stages("done", "done", "failed"),
+      payments: confirmedPayments,
+      canContinue: false,
+      recovery: {
+        title: "There is a gap in the payment record",
+        body: "Consecutive periods are needed before a credential can be issued.",
+        actionLabel: "Back to connect",
+        actionHref: "/connect",
+      },
+    };
+  }
+
+  if (scenario === "short") {
+    return {
+      stages: stages("done", "done", "failed"),
+      payments: confirmedPayments,
+      canContinue: false,
+      recovery: {
+        title: "Not enough periods yet",
+        body: "Fewer than three periods of pay have been confirmed. Come back after more payments land.",
+        actionLabel: "Back to connect",
+        actionHref: "/connect",
       },
     };
   }
@@ -183,7 +240,7 @@ export function reviewAt(elapsedMs: number, scenario: ReviewScenario): ReviewSna
     stages: stages("done", "done", "done"),
     payments: confirmedPayments.map((payment) => ({
       ...payment,
-      evidence: "verified",
+      evidence: settledEvidence(payment),
     })),
     canContinue: true,
   };
@@ -195,6 +252,8 @@ export function scenarioFromState(
 ): ReviewScenario {
   if (state === "empty") return "empty";
   if (state === "error" && error === "failed") return "failed";
+  if (state === "error" && error === "gap") return "gap";
+  if (state === "error" && error === "short") return "short";
   if (state === "error") return "unrecognised";
   return "happy";
 }

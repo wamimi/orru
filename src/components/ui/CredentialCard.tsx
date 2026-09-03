@@ -9,12 +9,12 @@ export type CredentialData = {
   lastPayment: string;
   payer: string;
   issuedOn: string;
-  status: "Valid" | "Expired" | "Revoked";
+  status: "Valid" | "Expired" | "Revoked" | "Preview";
 };
 
 export const sampleCredential: CredentialData = {
   id: "orru:cred:8f41c2a7",
-  band: "$2,500 – $5,000",
+  band: "$3,000 – $5,000",
   bandUnit: "per month",
   periods: "4 consecutive",
   lastPayment: "6 days ago",
@@ -55,7 +55,10 @@ export function CredentialCard({
             </p>
             <p className="meta mt-1 text-ink-faint">{data.bandUnit}</p>
           </div>
-          <EvidenceBadge state="verified" label={data.status} />
+          <EvidenceBadge
+            state={data.status === "Preview" ? "found" : "verified"}
+            label={data.status}
+          />
         </div>
 
         <div className="mt-6">
@@ -63,7 +66,7 @@ export function CredentialCard({
           <MetaRow
             label="Last payment"
             value={data.lastPayment}
-            trailing={<EvidenceBadge state="attested" />}
+            trailing={<EvidenceBadge state={data.status === "Preview" ? "found" : "attested"} />}
           />
           <MetaRow label="Source" value={data.payer} />
           <MetaRow label="Issued on" value={data.issuedOn} />

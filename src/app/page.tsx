@@ -1,3 +1,4 @@
+import { Lockup } from "@/components/brand/Lockup";
 import { WaitlistForm } from "@/components/WaitlistForm";
 
 function ContourField() {
@@ -53,9 +54,9 @@ export default function Home() {
     <main className="waitlist-shell hero-wash relative isolate min-h-svh overflow-hidden text-paper">
       <ContourField />
       <div className="relative z-10 mx-auto flex min-h-svh w-full max-w-3xl flex-col items-center justify-center px-6 py-16 text-center">
-        <p className="animate-rise font-display text-[clamp(3.4rem,14vw,7.5rem)] font-extrabold leading-[0.9] tracking-[-0.04em] text-paper">
-          orru
-        </p>
+        <div className="animate-rise text-paper">
+          <Lockup height={80} />
+        </div>
 
         <h1 className="animate-rise-delay-1 mt-8 max-w-2xl font-display text-[clamp(1.75rem,4.5vw,2.75rem)] font-bold leading-[1.1] tracking-[-0.03em]">
           Prove crypto income.

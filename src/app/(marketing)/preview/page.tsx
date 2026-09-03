@@ -72,7 +72,7 @@ const steps = [
 ];
 
 const sharedFields = [
-  { label: "Income band", value: "$2,500 – $5,000", state: "verified" as const },
+  { label: "Income band", value: "$3,000 – $5,000", state: "verified" as const },
   { label: "Consecutive periods", value: "4", state: "verified" as const },
   { label: "Most recent payment", value: "6 days ago", state: "attested" as const },
   { label: "Payer recognised", value: "yes", state: "attested" as const },

@@ -74,10 +74,14 @@ export async function POST(request: NextRequest) {
             Accept: "application/json",
           },
           body: JSON.stringify({
+            name: "Orru waitlist",
             email,
             source,
+            message: `${email} joined the waitlist from ${source}.`,
+            _replyto: email,
             _subject: "Orru waitlist signup",
             _template: "table",
+            _captcha: "false",
           }),
         },
       );
@@ -85,6 +89,12 @@ export async function POST(request: NextRequest) {
       if (!response.ok) {
         throw new Error(`FormSubmit failed with ${response.status}`);
       }
+    } else if (process.env.NODE_ENV === "production") {
+      console.error("[waitlist] no delivery method configured");
+      return NextResponse.json(
+        { error: "Waitlist delivery is not configured." },
+        { status: 503 },
+      );
     } else {
       console.info("[waitlist]", { email, source, at: new Date().toISOString() });
     }

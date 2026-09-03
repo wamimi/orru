@@ -13,9 +13,6 @@ import { demoSubject } from "@/lib/mock";
 
 type StepStatus = "idle" | "working" | "done" | "error";
 
-const OWNERSHIP_MESSAGE =
-  "This address is mine. Orru will only look up incoming payments to it. Nothing is moved.";
-
 export function ConnectScreen() {
   const router = useRouter();
   const search = useSearchParams();
@@ -133,19 +130,51 @@ export function ConnectScreen() {
       return;
     }
     try {
-      await signMessage(
-        { message: OWNERSHIP_MESSAGE },
+      const challengeResponse = await fetch(
+        `/api/auth/challenge?address=${liveAddress}`,
+      );
+      const challengeBody = (await challengeResponse.json()) as {
+        message?: string;
+        challenge?: string;
+        error?: string;
+      };
+      if (!challengeResponse.ok || !challengeBody.message || !challengeBody.challenge) {
+        setSign("error");
+        return;
+      }
+      const { signature } = await signMessage(
+        { message: challengeBody.message },
         {
           address: liveAddress,
           uiOptions: { title: "Sign a short message" },
         },
       );
+      const verifyResponse = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          address: liveAddress,
+          signature,
+          challenge: challengeBody.challenge,
+        }),
+      });
+      const verifyBody = (await verifyResponse.json()) as {
+        ok?: boolean;
+        sessionToken?: string;
+      };
+      if (!verifyResponse.ok || !verifyBody.sessionToken) {
+        setSign("error");
+        return;
+      }
       setSign("done");
       update({
         address: liveAddress,
         connected: true,
         signed: true,
+        sessionToken: verifyBody.sessionToken,
         requestId: requestId ?? session.requestId,
+        income: null,
       });
     } catch {
       setSign("error");
@@ -156,6 +185,11 @@ export function ConnectScreen() {
     if (!qa) {
       try {
         await logout();
+      } catch {
+        /* ignore */
+      }
+      try {
+        await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
       } catch {
         /* ignore */
       }
@@ -240,7 +274,7 @@ export function ConnectScreen() {
                 <p className="display-sm text-ink">Sign a short message</p>
                 <p className="mt-1 max-w-md text-sm leading-relaxed text-ink-soft">
                   The message says this address is yours. Signing costs nothing
-                  and can be cancelled.
+                  and can be cancelled. This is free and moves no money.
                 </p>
               </div>
             </div>

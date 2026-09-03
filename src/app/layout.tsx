@@ -44,6 +44,10 @@ export const metadata: Metadata = {
   description:
     "Orru helps people paid in stablecoins prove recurring income privately and access credit against it — without a bank statement.",
   alternates: { canonical: "/" },
+  icons: {
+    icon: [{ url: "/icon", type: "image/png" }],
+    apple: [{ url: "/apple-icon", type: "image/png" }],
+  },
   openGraph: {
     type: "website",
     url: "/",
