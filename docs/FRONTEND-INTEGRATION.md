@@ -344,21 +344,75 @@ ordinary loading states.
 
 ---
 
-## 7. Open questions — tell me and I'll build to your answer
+## 7. Answered — these are now fixed
 
-1. **Credential ID format.** I plan a `bytes32` shown as a shortened hex string.
-   If you'd rather have something human-readable for the verification page
-   (`ORRU-7K2M-9QX4`), say so now — it's a contract-level decision and cheap to
-   change before deployment, awkward after.
-2. **Income band table.** How many bands, and what boundaries? I need the exact
-   numbers baked into the circuit, and they're expensive to change afterwards.
-   Proposed: `$0–1k · $1–2k · $2–3k · $3–5k · $5k+`.
-3. **Does the business dashboard need a wallet connection at all?** Simpler if
-   it's API-key only. Which do you want?
-4. **Where do evidence labels appear?** Inline per row, an expandable panel, or a
-   separate tab? Affects what I return per period.
+**1. Credential ID format: `bytes32`**, displayed shortened (`0x17ae…bfb5`). The
+public verification page accepts the full hex.
+
+**2. Income bands: ten, in `shared/bands.ts`.** Compiled into the Noir circuit,
+so treat them as frozen once the verifier is generated.
+
+Spaced multiplicatively, not linearly, because income is roughly log-normal.
+Linear bands are wrong at both ends: a single `$0–1,000` treats $50 and $999
+identically, and a `$5,000+` treats $5,000 and $100,000 identically. What is held
+constant is **relative width, 50–67% per band** — that is how much the band
+narrows a lender's uncertainty.
+
+| id | Range | id | Range |
+|---|---|---|---|
+| 0 | $0 – $500 | 5 | $4,000 – $6,000 |
+| 1 | $500 – $1,000 | 6 | $6,000 – $10,000 |
+| 2 | $1,000 – $1,500 | 7 | $10,000 – $15,000 |
+| 3 | $1,500 – $2,500 | 8 | $15,000 – $25,000 |
+| 4 | $2,500 – $4,000 | 9 | $25,000+ |
+
+Import `BANDS` and `bandFor()` — don't hardcode boundaries or labels.
+
+The three demo workers land in **bands 4, 5 and 1**, so the screens have real
+variety to render.
+
+**Worth knowing when you write the copy:** the band is the *public* part of the
+credential. Narrower bands are more useful to a lender and less private to the
+worker. Never present a band as if it were an exact figure.
+
+**3. Business side is API-only. No dashboard, no wallet connection.**
+Authentication is an API key. `POST /api/policy`, `POST /api/request`,
+`GET /api/report/:requestId` as specified in §3 — but nothing renders them.
+
+> ⚠️ **This drops M9**, a MUST in the MVP, and the 20-second lender beat at 1:30
+> in the demo script. An API returning JSON demos as a terminal window, and two
+> of the five judging pillars are product vision and technical alignment.
+>
+> **Agreed middle path: build API-only, but add one read-only page** at
+> `/report/[id]` that renders `GET /api/report/:requestId`. No policy builder, no
+> auth UI, no wallet. Roughly an hour, and it restores the whole beat — pass/fail,
+> reason codes, evidence rows, Creditcoin transaction links.
+
+**4. Evidence labels: inline per period, expandable.** Each row in the §3
+`evidence` array renders as a line with a chain name and a link, collapsed by
+default.
 
 ---
+
+## 7b. One thing that changed underneath you
+
+**The payment token is no longer Circle's testnet USDC.** It is now `DemoUSDC`
+(`dUSD`), six decimals, deployed by us on Sepolia.
+
+Why: Circle's faucet gives ~10 USDC per claim, so every worker necessarily
+landed in band 0 and the product's whole point — distinguishing bands — could
+not be demonstrated. Minting our own removes that limit. The transfers are still
+real ERC-20 transfers in real Sepolia blocks, and Attestcoin proves them
+identically; it never inspects which token moved.
+
+For you this changes almost nothing — the frontend never reads the token
+directly — but two things matter:
+
+- **Still six decimals.** Divide by `1e6`, same as before.
+- **One period is one pay cycle**, and the salary is the monthly figure
+  directly. There is no scale factor to apply anywhere. Four-hour periods are a
+  time compression so history accrues inside the hackathon window; that is
+  disclosed, and the amounts themselves are not manipulated.
 
 ## 8. Reference
 
