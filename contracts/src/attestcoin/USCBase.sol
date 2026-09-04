@@ -22,9 +22,16 @@ abstract contract USCBase {
     }
 
     /// @dev Invoked only after the source transaction is authenticated.
-    function _processAndEmitEvent(uint8 action, bytes32 queryId, bytes memory encodedTransaction)
-        internal
-        virtual;
+    ///      `chainKey` and `blockHeight` are forwarded so a subclass can pin the
+    ///      source chain; `queryId` is a hash and cannot be inverted to recover
+    ///      them.
+    function _processAndEmitEvent(
+        uint8 action,
+        uint64 chainKey,
+        uint64 blockHeight,
+        bytes32 queryId,
+        bytes memory encodedTransaction
+    ) internal virtual;
 
     /// @notice Submits a proof bundle for a source-chain transaction.
     /// @dev Permissionless: the proof is the authorization.
@@ -57,7 +64,7 @@ abstract contract USCBase {
 
         processedQueries[queryId] = true;
 
-        _processAndEmitEvent(action, queryId, encodedTransaction);
+        _processAndEmitEvent(action, chainKey, blockHeight, queryId, encodedTransaction);
 
         return true;
     }

@@ -8,15 +8,22 @@ import {INativeQueryVerifier, NativeQueryVerifierLib} from "../../src/attestcoin
 /// @dev Minimal concrete subclass so the abstract base can be exercised.
 contract USCBaseHarness is USCBase {
     uint8 public lastAction;
+    uint64 public lastChainKey;
+    uint64 public lastBlockHeight;
     bytes32 public lastQueryId;
     bytes public lastEncodedTransaction;
     uint256 public processCount;
 
-    function _processAndEmitEvent(uint8 action, bytes32 queryId, bytes memory encodedTransaction)
-        internal
-        override
-    {
+    function _processAndEmitEvent(
+        uint8 action,
+        uint64 chainKey,
+        uint64 blockHeight,
+        bytes32 queryId,
+        bytes memory encodedTransaction
+    ) internal override {
         lastAction = action;
+        lastChainKey = chainKey;
+        lastBlockHeight = blockHeight;
         lastQueryId = queryId;
         lastEncodedTransaction = encodedTransaction;
         ++processCount;
@@ -136,6 +143,14 @@ contract USCBaseTest is Test {
         _mockVerify(true);
         assertTrue(_execute());
         assertEq(base.processCount(), 1);
+    }
+
+    /// @dev A subclass must be able to pin the source chain. Without these the
+    ///      trusted-source check degrades to "any chain the precompile attests".
+    function test_hookReceivesTheAuthenticatedProvenance() public {
+        _execute();
+        assertEq(base.lastChainKey(), CHAIN_KEY, "hook must see the source chain");
+        assertEq(base.lastBlockHeight(), BLOCK_HEIGHT, "hook must see the block height");
     }
 
     function test_verifierPointsAtThePrecompile() public view {
