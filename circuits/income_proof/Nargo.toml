@@ -1,6 +1,6 @@
 [package]
 name = "income_proof"
-type = "lib"
+type = "bin"
 authors = ["Orru"]
 compiler_version = ">=1.0.0"
 
