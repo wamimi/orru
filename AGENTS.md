@@ -149,6 +149,8 @@ is deliberately immutable because it is a trust root.
 | via_ir | **false** | `true` fails the verifier with a Yul stack-too-deep exception |
 | nargo | **1.0.0-beta.18** | The version the 19 Aug pipeline was proven on |
 | bb | **3.0.0-nightly.20260102** | Ditto. Paired with the above |
+| poseidon (Noir lib) | **v0.2.6** | v0.3.0 needs newer Noir syntax |
+| keccak256 (Noir lib) | **v0.1.3** | beta.18 ships no hash functions in std |
 | @gluwa/usc-sdk | **0.18.0** exactly | Proven working |
 | @gluwa/usc-contracts | **0.1.2** exactly | Proven working |
 
