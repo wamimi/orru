@@ -132,7 +132,8 @@ money."* Users are conditioned to fear signature prompts; defuse it inline.
   "payerName": "Orru Demo Payroll",       // resolved from the payer registry
   "payerAddress": "0x...",
   "payerTier": 1,                          // 1 = seeded, 2 = many-payees rule
-  "periodsVerified": 6,
+  "periodsVerified": 3,
+  "evidencePayer": "0x...",                // all periods must share one payer
   "periodsConsecutive": true,              // false blocks credential issuance
   "firstPeriod": 1,
   "latestPeriod": 6,
@@ -188,9 +189,24 @@ This is where the proof is generated and the credential is issued.
 | **Latency** | **5–40s for proving**, then ~15s for the transaction |
 
 ```
-POST /api/credential/issue  { sessionToken, proof, publicInputs }
+POST /api/credential/issue
+     { sessionToken, proof, publicInputs, evidencePayer, documentHash,
+       deadline, subjectAuthorization }
      → { credentialId, txHash, status: "issued" }
 ```
+
+**The user signs twice.** Once at S2 to prove wallet control, and once here to
+authorize issuance. The second is an EIP-712 typed-data signature over the proof,
+the public inputs, the payer, the document hash, a nonce and a deadline — without
+it anyone could issue a credential for someone else's address.
+
+Build it with `signTypedData`. The domain is `{ name: 'Orru', version: '1',
+chainId: 102031, verifyingContract: <CredentialRegistry> }`; the contract also
+exposes `domainSeparator()` and `nonces(address)`. Smart accounts work via
+ERC-1271.
+
+**UI:** treat it as part of the same "issuing your credential" step, not a
+separate screen. Say *"Sign to issue your credential — this is free."*
 
 **This is the only genuinely slow step in the app.** Budget for up to 40 seconds
 and design a real progress experience — staged messages, not a spinner. Never say
@@ -266,7 +282,7 @@ visually distinct.
 | | |
 |---|---|
 | **Action** | Approve → mock funds actually transfer on Creditcoin |
-| **Call** | `POST /api/credit/disburse` → `DemoCreditPool.disburse(subject, amount)` |
+| **Call** | `POST /api/credit/disburse` → `DemoCreditPool.disburse(credentialId, amount)` |
 | **Chain** | Creditcoin |
 | **Latency** | ~15s |
 
@@ -281,7 +297,8 @@ moment, not a toast notification.
 **No login. No wallet. Works in a fresh incognito window.** This is the most
 demoable surface we have and it must be a plain server-rendered page.
 
-`GET /api/verify/:credentialId` — reads `CredentialRegistry` directly:
+`GET /api/verify/:credentialId` — mostly a direct `CredentialRegistry` read; the
+date fields are resolved by the API from the stored source block height:
 
 ```jsonc
 {
@@ -292,10 +309,13 @@ demoable surface we have and it must be a plain server-rendered page.
   "subjectAddress": "0x...",
   "walletBindingProven": true,
   "incomeBand": { "id": 2, "label": "$2,000–3,000 / month" },
-  "periodsProven": 6,
+  "periodsProven": 3,
+  // derived by the API from evidenceEndHeight; the registry stores the height
   "verificationPeriod": { "from": "2026-08-27", "to": "2026-09-08" },
   "attestcoinVerifiedFacts": ["payments_occurred", "payer_identity"],
   "documentHash": "0x...",
+  "evidenceEndHeight": 11626539,           // Ethereum block of the newest payment
+  "evidenceEndDate": "2026-09-04T09:12:00Z", // resolved from that block
   "issuanceTx": "0x...",
   "revocationTx": null
 }
@@ -303,6 +323,11 @@ demoable surface we have and it must be a plain server-rendered page.
 
 Three states to design: **valid**, **revoked** (S4 demos this live on stage — it
 must look unmistakably different, not a subtle badge change), and **unknown id**.
+
+**Credentials never expire**, so there is no fourth state. They attest a dated
+past window, which stays true. Show `evidenceEndDate` prominently — a consumer
+decides for themselves whether evidence that old is fresh enough, and the
+business API returns the date so a lender's policy can apply a maximum age.
 
 **The page must include a "what this does not prove" section.** Non-negotiable —
 it's a disclosure item and judges will look for it. Verbatim content:
