@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.27;
 
-import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {DemoUSDC} from "../src/ethereum/DemoUSDC.sol";
 import {DemoPayroll} from "../src/ethereum/DemoPayroll.sol";
 import {PayerAnchor} from "../src/ethereum/PayerAnchor.sol";
+import {DeployBase} from "./DeployEthereum.s.sol";
 
 /// @notice Deploys DemoUSDC and a fresh DemoPayroll wired to it, reusing the
 ///         existing PayerAnchor.
@@ -20,8 +20,10 @@ import {PayerAnchor} from "../src/ethereum/PayerAnchor.sol";
 ///
 ///      forge script script/DeployDemoToken.s.sol:DeployDemoToken \
 ///        --rpc-url sepolia --account cc3-deployer --broadcast --verify
-contract DeployDemoToken is Script {
+contract DeployDemoToken is DeployBase {
     function run() external returns (DemoUSDC token, DemoPayroll payroll) {
+        _requireSepolia();
+
         address payerAnchor = vm.envAddress("PAYER_ANCHOR_ADDRESS");
         address owner = vm.envAddress("PAYROLL_OWNER");
         address keeper = vm.envAddress("PAYROLL_KEEPER");
@@ -37,9 +39,13 @@ contract DeployDemoToken is Script {
         require(owner != keeper, "owner and keeper must differ: the keeper is a hot cron key");
 
         vm.startBroadcast();
-        token = new DemoUSDC(owner);
+        // Deployed to the broadcaster so minting succeeds even when the intended
+        // owner is a different account, then handed over.
+        (, address broadcaster,) = vm.readCallers();
+        token = new DemoUSDC(broadcaster);
         payroll = new DemoPayroll(IERC20(address(token)), PayerAnchor(payerAnchor), owner, keeper, periodSeconds);
         token.mint(address(payroll), mintAmount);
+        token.transferOwnership(owner);
         vm.stopBroadcast();
 
         console2.log("");
@@ -50,6 +56,9 @@ contract DeployDemoToken is Script {
         console2.log("  minted to payroll", token.balanceOf(address(payroll)) / 1e6, "dUSD");
         console2.log("  periodSeconds  ", periodSeconds);
         console2.log("  firstDuePeriod ", payroll.nextDuePeriod());
+
+        _record("DemoUSDC", address(token));
+        _record("DemoPayroll", address(payroll));
 
         console2.log("");
         console2.log("  .env additions:");
