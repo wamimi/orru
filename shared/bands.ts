@@ -13,7 +13,6 @@ export interface Band {
 }
 
 /** The circuit compares against a fixed value, so the top band needs a bound. */
-/** The circuit compares against a fixed value, so the top band needs a bound. */
 export const BAND_CEILING = 10_000_000_000_000n // 10,000,000 units
 
 /**
@@ -51,20 +50,20 @@ export function bandFor(amountBaseUnits: bigint): Band {
 
 /** Every amount below the ceiling must land in exactly one band. */
 export function assertTableIsContiguous(): void {
-  if (BANDS[0].lo !== 0n) throw new Error('bands: table must start at zero')
+  if (BANDS[0]!.lo !== 0n) throw new Error('bands: table must start at zero')
   for (let i = 1; i < BANDS.length; i++) {
-    if (BANDS[i].lo !== BANDS[i - 1].hi) {
+    if (BANDS[i]!.lo !== BANDS[i - 1]!.hi) {
       throw new Error(`bands: gap or overlap between band ${i - 1} and ${i}`)
     }
   }
-  if (BANDS[BANDS.length - 1].hi !== BAND_CEILING) {
+  if (BANDS[BANDS.length - 1]!.hi !== BAND_CEILING) {
     throw new Error('bands: table must end at the ceiling')
   }
 }
 
 /** Demo payroll salaries, per pay cycle. */
 export const DEMO_SALARIES = {
-  worker1: 2_500_000_000n, // $2,500 -> band 2
-  worker2: 4_100_000_000n, // $4,100 -> band 3
-  worker3: 850_000_000n, //   $850  -> band 0
+  worker1: 2_500_000_000n, // $2,500 -> band 4
+  worker2: 4_100_000_000n, // $4,100 -> band 5
+  worker3: 850_000_000n, //   $850  -> band 1
 } as const
