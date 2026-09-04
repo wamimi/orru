@@ -52,15 +52,23 @@ const payrollA = '0x41C2f146F009b3C3eE7828f3DCf108d38e1b7EF3'
 const payrollB = '0x16EaB9DA91D2AEea1F1138A95E42C37d1D47B7d2'
 check('salt binds the payer', saltFor(payrollA, recipient, period) !== saltFor(payrollB, recipient, period), true)
 
-// 6. values Noir cannot hold are rejected rather than silently reduced
-const MOD = 21888242871839275222246405745257275088548364400416034343698204186575808495617n
+// 6. values the circuit cannot represent are rejected here, not at proving time
+const U64_MAX = (1n << 64n) - 1n
+let acceptedMax = true
+try {
+  commitmentFor({ recipient, amount: U64_MAX, period, salt })
+} catch {
+  acceptedMax = false
+}
+check('accepts the largest u64 amount', acceptedMax, true)
+
 let threw = false
 try {
-  commitmentFor({ recipient, amount: MOD, period, salt })
+  commitmentFor({ recipient, amount: U64_MAX + 1n, period, salt })
 } catch {
   threw = true
 }
-check('rejects an amount at the bn254 modulus', threw, true)
+check('rejects an amount above the u64 witness range', threw, true)
 
 console.log(failures === 0 ? '\nall passed' : `\n${failures} FAILED`)
 process.exit(failures === 0 ? 0 : 1)
