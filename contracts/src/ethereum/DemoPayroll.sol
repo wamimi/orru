@@ -2,6 +2,7 @@
 pragma solidity 0.8.27;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -16,13 +17,12 @@ contract DemoPayroll is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint256 public constant MAX_RECIPIENTS = 10;
+    uint8 public constant TOKEN_DECIMALS = 6;
     uint256 public constant MIN_PERIOD_SECONDS = 15 minutes;
     uint256 public constant MAX_PERIOD_SECONDS = 30 days;
 
     IERC20 public immutable usdc;
 
-    /// @dev Zero disables anchoring, for deployments on chains the verifier
-    ///      cannot read. Commitments are still emitted for anchoring elsewhere.
     PayerAnchor public immutable anchor;
 
     address public keeper;
@@ -75,6 +75,8 @@ contract DemoPayroll is Ownable, ReentrancyGuard {
     error TransferFailed(address recipient, uint256 period);
     error OnlySelf();
     error RenounceDisabled();
+    error UnsupportedDecimals(uint8 given);
+    error IncorrectAmountReceived(address recipient, uint256 expected, uint256 received);
 
     constructor(
         IERC20 _usdc,
@@ -84,8 +86,15 @@ contract DemoPayroll is Ownable, ReentrancyGuard {
         uint256 _periodSeconds
     ) Ownable(_owner) {
         if (address(_usdc) == address(0)) revert ZeroAddress();
+        // Anchoring is mandatory. Without it a payment produces no source event,
+        // so nothing downstream can prove it happened.
+        if (address(_anchor) == address(0)) revert ZeroAddress();
         if (_keeper == address(0)) revert ZeroAddress();
         _checkPeriodBounds(_periodSeconds);
+
+        // Band bounds and every downstream limit assume six decimals.
+        uint8 tokenDecimals = IERC20Metadata(address(_usdc)).decimals();
+        if (tokenDecimals != TOKEN_DECIMALS) revert UnsupportedDecimals(tokenDecimals);
 
         usdc = _usdc;
         anchor = _anchor;
@@ -146,7 +155,7 @@ contract DemoPayroll is Ownable, ReentrancyGuard {
             }
         }
 
-        if (eligible != 0 && address(anchor) != address(0)) {
+        if (eligible != 0) {
             anchor.anchorBatch(collected);
         }
 
@@ -157,7 +166,14 @@ contract DemoPayroll is Ownable, ReentrancyGuard {
     /// @dev External so the caller can catch a failure and name the recipient.
     function selfTransfer(address to, uint256 amount) external {
         if (msg.sender != address(this)) revert OnlySelf();
+
+        // The commitment records `amount`, so the recipient must actually
+        // receive it. A fee-on-transfer or non-standard token would otherwise
+        // have the proof attest a figure that never arrived.
+        uint256 before = usdc.balanceOf(to);
         usdc.safeTransfer(to, amount);
+        uint256 received = usdc.balanceOf(to) - before;
+        if (received != amount) revert IncorrectAmountReceived(to, amount, received);
     }
 
     /// @notice Adds a recipient, owed from the next whole period. Owner only.
