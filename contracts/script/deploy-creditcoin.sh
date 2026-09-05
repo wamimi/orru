@@ -42,7 +42,10 @@ info() { printf '        %s\n' "$*"; }
 warn() { printf '  \033[33mwarn\033[0m  %s\n' "$*"; }
 die()  { printf '  \033[31mFATAL\033[0m %s\n' "$*" >&2; exit 1; }
 
-set -a; . ./.env 2>/dev/null || true; set +a
+# Overridable so a run can be pointed at another configuration without
+# editing the checked-out .env.
+ENV_FILE="${ORRU_ENV_FILE:-./.env}"
+set -a; . "$ENV_FILE" 2>/dev/null || true; set +a
 
 : "${CREDITCOIN_RPC_URL:?CREDITCOIN_RPC_URL is not set in contracts/.env}"
 : "${SOURCE_CHAIN_KEY:?SOURCE_CHAIN_KEY is not set in contracts/.env}"
@@ -73,16 +76,24 @@ except Exception: print('')
 "
 }
 
+# Written through a temporary file and renamed, so a crash mid-write cannot leave
+# a truncated record that reads as an empty one and re-deploys everything.
 write_addr() {
   ensure_record
   python3 -c "
-import json
-p='$RECORD'
-try: d=json.load(open(p))
-except Exception: d={}
-d['$1']='$2'
-json.dump(d, open(p,'w'), indent=2, sort_keys=True)
-open(p,'a').write('\n')
+import json, os
+p = '$RECORD'
+try:
+    with open(p) as f: d = json.load(f)
+except Exception: d = {}
+d['$1'] = '$2'
+tmp = p + '.tmp'
+with open(tmp, 'w') as f:
+    json.dump(d, f, indent=2, sort_keys=True)
+    f.write('\n')
+    f.flush()
+    os.fsync(f.fileno())
+os.replace(tmp, p)
 "
 }
 
@@ -93,19 +104,26 @@ actual_chain=$(cast chain-id --rpc-url "$RPC" 2>/dev/null || echo "")
 [ "$actual_chain" = "$CHAIN_ID" ] || die "RPC reports chain id '$actual_chain', expected $CHAIN_ID"
 ok "chain id $CHAIN_ID"
 
-# A source chain KEY is not an EVM chain id. Sepolia is 1, mainnet is 3. An EVM
-# chain id here builds a registry that will never match a real proof, and the
-# field is immutable.
-case "$SOURCE_CHAIN_KEY" in
-  1|2|3) ok "source chain key $SOURCE_CHAIN_KEY" ;;
-  11155111|8453|84532|137|42161|10)
-    die "SOURCE_CHAIN_KEY is $SOURCE_CHAIN_KEY, an EVM chain id. Sepolia is 1, Ethereum mainnet is 3." ;;
-  *) warn "source chain key $SOURCE_CHAIN_KEY is unusual — Sepolia is 1, Ethereum mainnet is 3" ;;
-esac
+# SOURCE_CHAIN_KEY and TRUSTED_ANCHOR are immutable. A wrong value here is not a
+# misconfiguration to correct later, it is a redeployment — so both are fatal,
+# not warnings. Orru reads Ethereum Sepolia, which is key 1.
+[ "$SOURCE_CHAIN_KEY" = "1" ] || die \
+  "SOURCE_CHAIN_KEY is $SOURCE_CHAIN_KEY. Orru reads Ethereum Sepolia, which is key 1 on Creditcoin \
+testnet (an EVM chain id such as 11155111 is a different thing entirely). Set SOURCE_CHAIN_KEY=1."
+ok "source chain key 1 (Ethereum Sepolia)"
 
-[ "$(cast code "$PAYER_ANCHOR_ADDRESS" --rpc-url "${SEPOLIA_RPC_URL:-$RPC}" 2>/dev/null | wc -c)" -gt 4 ] \
-  && ok "PayerAnchor $PAYER_ANCHOR_ADDRESS has code on the source chain" \
-  || warn "could not confirm code at $PAYER_ANCHOR_ADDRESS — TRUSTED_ANCHOR is immutable, check it"
+# Checked against the SOURCE chain. Falling back to the Creditcoin RPC would look
+# up a Sepolia address on the wrong chain and report whatever it found.
+[ -n "${SEPOLIA_RPC_URL:-}" ] || die "SEPOLIA_RPC_URL is required to verify the anchor before pinning it"
+source_chain=$(cast chain-id --rpc-url "$SEPOLIA_RPC_URL" 2>/dev/null || echo "")
+[ "$source_chain" = "11155111" ] || die \
+  "SEPOLIA_RPC_URL reports chain id '$source_chain', expected 11155111"
+ok "source RPC is Sepolia"
+
+anchor_code=$(cast code "$PAYER_ANCHOR_ADDRESS" --rpc-url "$SEPOLIA_RPC_URL" 2>/dev/null | wc -c | tr -d ' ')
+[ "${anchor_code:-0}" -gt 4 ] || die \
+  "no code at PAYER_ANCHOR_ADDRESS $PAYER_ANCHOR_ADDRESS on Sepolia — TRUSTED_ANCHOR is immutable"
+ok "PayerAnchor $PAYER_ANCHOR_ADDRESS has code on Sepolia"
 
 # A dry run should not ask for a keystore password. Set DEPLOYER_ADDRESS to skip
 # the prompt entirely; broadcasting still unlocks the keystore.
@@ -157,6 +175,12 @@ deploy() {
   local existing
   existing=$(read_addr "$key")
   if [ -n "$existing" ]; then
+    # A recorded address is trusted for linking, so an empty one would link the
+    # registry to nothing and every readback below would still pass.
+    local len
+    len=$(cast code "$existing" --rpc-url "$RPC" 2>/dev/null | wc -c | tr -d ' ' || true)
+    [ "${len:-0}" -gt 4 ] || die \
+      "$RECORD names $key at $existing but there is no code there. Remove the entry to redeploy."
     ok "$key already at $existing"
     return 0
   fi
@@ -231,6 +255,19 @@ deploy CredentialRegistry "src/creditcoin/CredentialRegistry.sol:CredentialRegis
   "${VERIFIER:-<IncomeVerifier>}" "$OWNER"
 
 bold "Settlement"
+
+# DemoCreditPool refuses a zero freshness floor, because a pool that was merely
+# deployed and funded would lend against evidence of any age. Derived from the
+# source head so it is a real policy rather than a number someone typed.
+if [ -z "${MINIMUM_EVIDENCE_HEIGHT:-}" ]; then
+  source_head=$(cast block-number --rpc-url "$SEPOLIA_RPC_URL" 2>/dev/null || echo "")
+  [ -n "$source_head" ] || die "could not read the Sepolia head to derive MINIMUM_EVIDENCE_HEIGHT"
+  window="${EVIDENCE_WINDOW_BLOCKS:-50400}"   # ~1 week at 12s blocks
+  MINIMUM_EVIDENCE_HEIGHT=$(( source_head > window ? source_head - window : 1 ))
+fi
+[ "$MINIMUM_EVIDENCE_HEIGHT" -gt 0 ] || die "MINIMUM_EVIDENCE_HEIGHT must be greater than zero"
+info "freshness floor: source height $MINIMUM_EVIDENCE_HEIGHT"
+
 # Two contracts are named MockUSDC — this one and test/mocks/Tokens.sol — so the
 # fully qualified path is required, here and everywhere else in this script.
 deploy MockUSDC "src/creditcoin/MockUSDC.sol:MockUSDC" "$OWNER"
@@ -239,7 +276,7 @@ CREDENTIALS=$(read_addr CredentialRegistry)
 TOKEN=$(read_addr MockUSDC)
 
 deploy DemoCreditPool "src/creditcoin/DemoCreditPool.sol:DemoCreditPool" \
-  "${TOKEN:-<MockUSDC>}" "${CREDENTIALS:-<CredentialRegistry>}" "$OWNER"
+  "${TOKEN:-<MockUSDC>}" "${CREDENTIALS:-<CredentialRegistry>}" "$OWNER" "$MINIMUM_EVIDENCE_HEIGHT"
 
 # --- report -----------------------------------------------------------------
 bold "Recorded"

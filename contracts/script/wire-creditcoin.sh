@@ -41,7 +41,10 @@ die()  { printf '  \033[31mFATAL\033[0m %s\n' "$*" >&2; exit 1; }
 
 FAILURES=0
 
-set -a; . ./.env 2>/dev/null || true; set +a
+# Overridable so a run can be pointed at another configuration without
+# editing the checked-out .env.
+ENV_FILE="${ORRU_ENV_FILE:-./.env}"
+set -a; . "$ENV_FILE" 2>/dev/null || true; set +a
 : "${CREDITCOIN_RPC_URL:?CREDITCOIN_RPC_URL is not set in contracts/.env}"
 RPC="$CREDITCOIN_RPC_URL"
 DEPLOYER_ACCOUNT="${DEPLOYER_ACCOUNT:-cc3-deployer}"
@@ -51,6 +54,9 @@ if [ -n "${DEPLOYER_PASSWORD_FILE:-}" ]; then
   [ -r "$DEPLOYER_PASSWORD_FILE" ] || die "cannot read DEPLOYER_PASSWORD_FILE at $DEPLOYER_PASSWORD_FILE"
   AUTH+=(--password-file "$DEPLOYER_PASSWORD_FILE")
 fi
+
+actual_chain=$(cast chain-id --rpc-url "$RPC" 2>/dev/null || echo "")
+[ "$actual_chain" = "$CHAIN_ID" ] || die "RPC reports chain id '$actual_chain', expected $CHAIN_ID"
 
 [ -f "$RECORD" ] || die "$RECORD not found — run ./script/deploy-creditcoin.sh --broadcast first"
 
@@ -131,7 +137,9 @@ if [ "$VERIFY_ONLY" != "1" ]; then
 
   bold "Funding"
   balance=$(cast call "$TOKEN" "balanceOf(address)(uint256)" "$POOL" --rpc-url "$RPC" 2>/dev/null | awk '{print $1}' || true)
-  if [ "${balance:-0}" != "0" ]; then
+  # A dust balance is not funding. Compared against the requested amount so a
+  # single base unit cannot skip the mint and still pass readback.
+  if [ "${balance:-0}" -ge "$POOL_FUNDING" ] 2>/dev/null; then
     ok "pool already holds $balance mUSDC base units"
   else
     send "mint $POOL_FUNDING mUSDC to the pool" "$TOKEN" "mint(address,uint256)" "$POOL" "$POOL_FUNDING"
@@ -188,14 +196,60 @@ for payer in "${PAYER_LIST[@]}"; do
 done
 
 pool_balance=$(cast call "$TOKEN" "balanceOf(address)(uint256)" "$POOL" --rpc-url "$RPC" 2>/dev/null | awk '{print $1}' || true)
-[ "${pool_balance:-0}" != "0" ] \
-  && ok "pool liquidity $pool_balance mUSDC base units" \
-  || bad "pool holds no mUSDC — disburse() reverts InsufficientLiquidity"
+if [ "${pool_balance:-0}" -ge "$POOL_FUNDING" ] 2>/dev/null; then
+  ok "pool liquidity $pool_balance mUSDC base units"
+else
+  bad "pool holds ${pool_balance:-0} mUSDC, wanted at least $POOL_FUNDING — disburse() runs dry"
+fi
 
-verifier_code=$(cast code "$VERIFIER" --rpc-url "$RPC" 2>/dev/null | wc -c | tr -d ' ' || true)
-[ "${verifier_code:-0}" -gt 4 ] \
-  && ok "verifier has code ($(( (verifier_code - 2) / 2 )) bytes)" \
-  || bad "no code at the verifier address — library linking probably failed"
+# A zero floor accepts evidence of any age. The constructor refuses it, so a zero
+# here means this pool was not deployed by this script.
+floor=$(cast call "$POOL" "minimumEvidenceHeight()(uint64)" --rpc-url "$RPC" 2>/dev/null | awk '{print $1}' || true)
+[ -n "${floor:-}" ] && [ "${floor:-0}" != "0" ] \
+  && ok "freshness floor at source height $floor" \
+  || bad "pool has no freshness floor — it would lend against evidence of any age"
+
+# Libraries are linked by address. A wrong one is invisible in every check above:
+# the top-level contracts still have code and still report the right immutables.
+check_library() {
+  local label="$1" addr="$2" artifact="$3" consumer_label="$4" consumer="$5"
+
+  local onchain
+  onchain=$(cast code "$addr" --rpc-url "$RPC" 2>/dev/null | tr -d '[:space:]' || true)
+  if [ "${#onchain}" -le 2 ]; then
+    bad "$label has no code at $addr — linking is broken"
+    return
+  fi
+
+  local want
+  want=$(python3 -c "
+import json
+try:
+    d = json.load(open('$artifact'))
+    print(len(d['deployedBytecode']['object']))
+except Exception:
+    print(0)
+" || true)
+  if [ "${want:-0}" -gt 0 ] && [ "${#onchain}" != "$want" ]; then
+    bad "$label at $addr is ${#onchain} chars of code, the local build is $want — different library"
+  else
+    ok "$label $addr matches the local build"
+  fi
+
+  # The linked address is baked into the consumer's runtime code.
+  local needle consumer_code
+  needle=$(printf '%s' "$addr" | sed 's/^0x//' | tr 'A-Z' 'a-z')
+  consumer_code=$(cast code "$consumer" --rpc-url "$RPC" 2>/dev/null | tr -d '[:space:]' | tr 'A-Z' 'a-z' || true)
+  case "$consumer_code" in
+    *"$needle"*) ok "$consumer_label links $label" ;;
+    *) bad "$consumer_label does not embed $label at $addr — it was linked to something else" ;;
+  esac
+}
+
+check_library "EvmV1Decoder  " "$(read_addr EvmV1Decoder)" \
+  "out/EvmV1Decoder.sol/EvmV1Decoder.json" "AttestationRegistry" "$ATTESTATIONS"
+check_library "ZKTranscriptLib" "$(read_addr ZKTranscriptLib)" \
+  "out/IncomeVerifier.sol/ZKTranscriptLib.json" "IncomeVerifier    " "$VERIFIER"
 
 echo
 if [ "$FAILURES" -eq 0 ]; then
