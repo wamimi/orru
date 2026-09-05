@@ -4,16 +4,24 @@ import { ethers } from "ethers"
 import { chainInfo, proofProvider } from "@gluwa/usc-sdk"
 import { attestationRegistryAbi, EXECUTE_SIGNATURE } from "./abi.js"
 import { creditcoinClient } from "./chains.js"
-import { config, requireDeployed } from "./config.js"
+import { config, positiveInt, requireDeployed } from "./config.js"
 import { log, short } from "./log.js"
-import { loadState, pendingAnchors, saveState, type AnchorTx } from "./state.js"
+import {
+  backoffMs,
+  loadState,
+  payersOf,
+  pendingAnchors,
+  relayable,
+  saveState,
+  type AnchorTx,
+} from "./state.js"
 import { loadSigner } from "./signer.js"
 
 /// Attestation trails the source head, and a continuity proof needs a later
 /// attested point than the block itself.
-const LOOKAHEAD = Number(process.env.WORKER_ATTEST_LOOKAHEAD ?? 10)
-const POLL_MS = Number(process.env.WORKER_POLL_MS ?? 5_000)
-const WAIT_MS = Number(process.env.WORKER_WAIT_MS ?? 1_200_000)
+const LOOKAHEAD = positiveInt("WORKER_ATTEST_LOOKAHEAD", 10)
+const POLL_MS = positiveInt("WORKER_POLL_MS", 5_000)
+const WAIT_MS = positiveInt("WORKER_WAIT_MS", 1_200_000)
 
 export interface AttestOptions {
   submit: boolean
@@ -25,15 +33,42 @@ export async function attest(options: AttestOptions): Promise<void> {
   const registryAddress = requireDeployed("attestationRegistry", "ATTESTATION_REGISTRY_ADDRESS")
 
   const state = loadState()
-  const queue = pendingAnchors(state).slice(0, options.limit)
+  const candidates = pendingAnchors(state)
 
-  if (queue.length === 0) {
+  if (candidates.length === 0) {
     log.info("no pending anchor transactions")
     return
   }
 
   const cc = creditcoinClient()
   await assertRegistryMatchesConfig(cc, registryAddress)
+
+  // Approvals are read once per distinct payer and the filter runs BEFORE the
+  // limit. Anyone can anchor a commitment, so unapproved anchors would
+  // otherwise fill every pass, oldest first, and starve the real ones.
+  const approved = new Set<string>()
+  for (const payer of payersOf(candidates.map(([, a]) => a))) {
+    const ok = await cc.readContract({
+      address: registryAddress,
+      abi: attestationRegistryAbi,
+      functionName: "approvedPayer",
+      args: [payer as `0x${string}`],
+    })
+    if (ok) approved.add(payer.toLowerCase())
+  }
+
+  const eligible = relayable(candidates, approved)
+  if (eligible.length < candidates.length) {
+    log.warn("skipping anchors with no approved payer", {
+      skipped: candidates.length - eligible.length,
+    })
+  }
+
+  const queue = eligible.slice(0, options.limit)
+  if (queue.length === 0) {
+    log.info("nothing relayable — approve a payer on the registry first")
+    return
+  }
 
   const ccProvider = new ethers.JsonRpcProvider(c.creditcoinRpcUrl, undefined, { staticNetwork: true })
   const info = new chainInfo.PrecompileChainInfoProvider(ccProvider)
@@ -50,14 +85,34 @@ export async function attest(options: AttestOptions): Promise<void> {
   log.step("attesting", { pending: queue.length, chainKey: c.sourceChainKey })
 
   for (const [txHash, anchor] of queue) {
-    try {
-      await attestOne(txHash, anchor, { cc, info, builder, signer, registryAddress })
-    } catch (error) {
-      anchor.status = "failed"
+    // Retry bookkeeping belongs to real attempts. A dry run that counted itself
+    // would inflate the backoff a later genuine failure is given.
+    if (options.submit) {
       anchor.attempts += 1
       anchor.lastAttemptAt = new Date().toISOString()
-      anchor.error = error instanceof Error ? error.message : String(error)
-      log.error("attestation failed", { tx: short(txHash), reason: anchor.error })
+    }
+
+    try {
+      await attestOne(txHash, anchor, { cc, info, builder, signer, registryAddress, approved })
+      if (options.submit) {
+        anchor.error = undefined
+        anchor.nextAttemptAt = undefined
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      anchor.error = reason
+
+      if (options.submit) {
+        anchor.status = "failed"
+        anchor.nextAttemptAt = new Date(Date.now() + backoffMs(anchor.attempts)).toISOString()
+      }
+
+      log.error("attestation failed", {
+        tx: short(txHash),
+        attempt: anchor.attempts,
+        retryAfter: anchor.nextAttemptAt ?? "not deferred (dry run)",
+        reason,
+      })
     }
     saveState(state)
   }
@@ -72,35 +127,21 @@ interface Deps {
   builder: InstanceType<typeof proofProvider.service.ProofBuilder>
   signer: ethers.Signer | null
   registryAddress: `0x${string}`
+  approved: ReadonlySet<string>
 }
 
 async function attestOne(txHash: string, anchor: AnchorTx, deps: Deps): Promise<void> {
   const c = config()
 
-  if (await alreadyAccepted(deps.cc, deps.registryAddress, anchor)) {
+  if (await allExpectedAccepted(deps, anchor)) {
     anchor.status = "accepted"
     log.info("already accepted on Creditcoin", { tx: short(txHash) })
     return
   }
 
-  // execute() reverts with NoTrustedLogs when no log survives its filters, and
-  // an unapproved payer is the filter that fails silently in the worker's view.
-  const unapproved: string[] = []
-  for (const { payer } of anchor.commitments) {
-    const approved = await deps.cc.readContract({
-      address: deps.registryAddress,
-      abi: attestationRegistryAbi,
-      functionName: "approvedPayer",
-      args: [payer],
-    })
-    if (!approved) unapproved.push(payer)
-  }
-  if (unapproved.length === anchor.commitments.length) {
-    throw new Error(
-      `no approved payer in this transaction (${[...new Set(unapproved)].join(", ")}) — ` +
-        `call setPayerApproval on the registry first`,
-    )
-  }
+  const unapproved = anchor.commitments
+    .map((c) => c.payer)
+    .filter((p) => !deps.approved.has(p.toLowerCase()))
   if (unapproved.length > 0) {
     log.warn("some payers are not approved and will be skipped on-chain", {
       payers: [...new Set(unapproved)].join(","),
@@ -151,8 +192,6 @@ async function attestOne(txHash: string, anchor: AnchorTx, deps: Deps): Promise<
   }
 
   const contract = new ethers.Contract(deps.registryAddress, [EXECUTE_SIGNATURE], deps.signer)
-  anchor.attempts += 1
-  anchor.lastAttemptAt = new Date().toISOString()
 
   const tx = await contract.getFunction("execute")(
     0,
@@ -174,8 +213,18 @@ async function attestOne(txHash: string, anchor: AnchorTx, deps: Deps): Promise<
     throw new Error(`Creditcoin transaction reverted: ${tx.hash}`)
   }
 
+  // The registry, not the receipt, decides what was accepted. A prover that
+  // returned a proof for a different transaction can still mine successfully
+  // here, and marking this one accepted would strand it forever.
+  if (!(await allExpectedAccepted(deps, anchor))) {
+    throw new Error(
+      `Creditcoin transaction ${tx.hash} succeeded but not every expected commitment is ` +
+        `recorded for its payer. The query may have been consumed by a different receipt; ` +
+        `inspect before retrying.`,
+    )
+  }
+
   anchor.status = "accepted"
-  anchor.error = undefined
   log.info("accepted", {
     tx: short(txHash),
     creditcoinTx: short(tx.hash),
@@ -183,21 +232,23 @@ async function attestOne(txHash: string, anchor: AnchorTx, deps: Deps): Promise<
   })
 }
 
-async function alreadyAccepted(
-  cc: ReturnType<typeof creditcoinClient>,
-  registry: `0x${string}`,
-  anchor: AnchorTx,
-): Promise<boolean> {
-  for (const { payer, commitment } of anchor.commitments) {
-    const accepted = await cc.readContract({
-      address: registry,
+/// Whether every commitment whose payer is approved is recorded on-chain.
+/// Commitments from unapproved payers are excluded: the registry will never
+/// accept them, so requiring them would make this permanently false.
+async function allExpectedAccepted(deps: Deps, anchor: AnchorTx): Promise<boolean> {
+  const expected = anchor.commitments.filter((c) => deps.approved.has(c.payer.toLowerCase()))
+  if (expected.length === 0) return false
+
+  for (const { payer, commitment } of expected) {
+    const accepted = await deps.cc.readContract({
+      address: deps.registryAddress,
       abi: attestationRegistryAbi,
       functionName: "acceptedByPayer",
       args: [commitment, payer],
     })
     if (!accepted) return false
   }
-  return anchor.commitments.length > 0
+  return true
 }
 
 /// The proof is served by a remote service. Nothing downstream re-derives these
