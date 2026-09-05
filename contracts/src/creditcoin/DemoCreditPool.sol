@@ -25,7 +25,15 @@ contract DemoCreditPool is Ownable, ReentrancyGuard {
     IERC20 public immutable token;
     CredentialRegistry public immutable credentials;
 
+    /// @dev Per credential, for reporting only. Not the cap: overlapping windows
+    ///      are distinct credentials describing one income, so charging each its
+    ///      own limit would lend several times over on the same salary.
     mapping(bytes32 credentialId => uint256 drawn) public drawnAgainst;
+
+    /// @dev The enforced exposure. Capped at the limit of the best band the
+    ///      subject has proven, so a higher band releases the difference and a
+    ///      lower one releases nothing.
+    mapping(address subject => uint256 drawn) public drawnBySubject;
 
     /// @dev Credentials never expire, so freshness is the consumer's policy and
     ///      this pool is a consumer. Evidence older than this source height is
@@ -41,6 +49,7 @@ contract DemoCreditPool is Ownable, ReentrancyGuard {
 
     error ZeroAddress();
     error UnsupportedDecimals(uint8 given);
+    error ZeroEvidenceFloor();
     error ZeroAmount();
     error CredentialNotValid(bytes32 credentialId);
     error UnknownBand(uint8 band);
@@ -50,11 +59,19 @@ contract DemoCreditPool is Ownable, ReentrancyGuard {
     error MinimumEvidenceHeightCannotDecrease(uint64 given, uint64 current);
     error IncorrectAmountReceived(address recipient, uint256 expected, uint256 received);
 
-    constructor(IERC20 _token, CredentialRegistry _credentials, address initialOwner)
-        Ownable(initialOwner)
-    {
+    /// @param initialMinimumEvidenceHeight Source height below which evidence is
+    ///        not lent against. Required and non-zero: a zero floor accepts a
+    ///        credential of any age, so a pool deployed and merely funded would
+    ///        have no freshness policy at all.
+    constructor(
+        IERC20 _token,
+        CredentialRegistry _credentials,
+        address initialOwner,
+        uint64 initialMinimumEvidenceHeight
+    ) Ownable(initialOwner) {
         if (address(_token) == address(0)) revert ZeroAddress();
         if (address(_credentials) == address(0)) revert ZeroAddress();
+        if (initialMinimumEvidenceHeight == 0) revert ZeroEvidenceFloor();
 
         // Limits are computed in six-decimal base units.
         uint8 tokenDecimals = IERC20Metadata(address(_token)).decimals();
@@ -62,6 +79,9 @@ contract DemoCreditPool is Ownable, ReentrancyGuard {
 
         token = _token;
         credentials = _credentials;
+        minimumEvidenceHeight = initialMinimumEvidenceHeight;
+
+        emit MinimumEvidenceHeightSet(initialMinimumEvidenceHeight);
     }
 
     /// @notice Releases an advance to the credential's subject.
@@ -80,13 +100,14 @@ contract DemoCreditPool is Ownable, ReentrancyGuard {
             revert EvidenceTooOld(c.evidenceEndHeight, minimumEvidenceHeight);
         }
 
-        uint256 remaining = _limitFor(c.band) - drawnAgainst[credentialId];
+        uint256 remaining = _remaining(c.subject, c.band);
         if (amount > remaining) revert ExceedsLimit(amount, remaining);
 
         uint256 available = token.balanceOf(address(this));
         if (amount > available) revert InsufficientLiquidity(amount, available);
 
         drawnAgainst[credentialId] += amount;
+        drawnBySubject[c.subject] += amount;
 
         // The limit is charged in full, so the subject must receive in full.
         uint256 before = token.balanceOf(c.subject);
@@ -127,11 +148,21 @@ contract DemoCreditPool is Ownable, ReentrancyGuard {
 
     /// @notice What remains drawable against a credential. Zero if it is not
     ///         valid or its evidence is below the freshness floor.
+    /// @dev Reflects the subject's total exposure, not this credential's own
+    ///      history, so presenting a second overlapping window adds nothing.
     function remainingFor(bytes32 credentialId) external view returns (uint256) {
         if (credentials.statusOf(credentialId) != CredentialRegistry.Status.Valid) return 0;
         CredentialRegistry.Credential memory c = credentials.credentialOf(credentialId);
         if (c.evidenceEndHeight < minimumEvidenceHeight) return 0;
-        return _limitFor(c.band) - drawnAgainst[credentialId];
+        return _remaining(c.subject, c.band);
+    }
+
+    /// @dev Saturates at zero rather than underflowing when the subject has
+    ///      already drawn more than a lower band would have allowed.
+    function _remaining(address subject, uint8 band) internal view returns (uint256) {
+        uint256 limit = _limitFor(band);
+        uint256 drawn = drawnBySubject[subject];
+        return drawn >= limit ? 0 : limit - drawn;
     }
 
     /// @notice Total advance a band permits.

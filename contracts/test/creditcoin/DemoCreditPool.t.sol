@@ -50,7 +50,7 @@ contract DemoCreditPoolTest is Test {
         nullifiers = new NullifierRegistry(owner);
         credentials = new CredentialRegistry(attestations, nullifiers, new AlwaysAccepts(), owner);
         musd = new MockUSDC(owner);
-        pool = new DemoCreditPool(IERC20(address(musd)), credentials, owner);
+        pool = new DemoCreditPool(IERC20(address(musd)), credentials, owner, 1);
 
         vm.startPrank(owner);
         attestations.setPayerApproval(payer, true);
@@ -132,6 +132,79 @@ contract DemoCreditPoolTest is Test {
         vm.expectRevert(abi.encodeWithSelector(DemoCreditPool.ExceedsLimit.selector, 100e6, 50e6));
         pool.disburse(validCredential, 100e6);
         vm.stopPrank();
+    }
+
+    /// @dev A zero floor accepts evidence of any age, so a pool that was merely
+    ///      deployed and funded would have no freshness policy. Making it a
+    ///      required constructor argument removes that state entirely.
+    function test_aPoolCannotBeDeployedWithoutAFreshnessFloor() public {
+        vm.expectRevert(DemoCreditPool.ZeroEvidenceFloor.selector);
+        new DemoCreditPool(IERC20(address(musd)), credentials, owner, 0);
+    }
+
+    function test_theFloorIsLiveFromConstruction() public view {
+        assertEq(pool.minimumEvidenceHeight(), 1);
+    }
+
+    // ------------------------------------------------- overlapping evidence
+
+    /// @dev Windows [C1,C2,C3] and [C2,C3,C4] are different evidence sets and so
+    ///      different credentials, but they describe the same income. Charging
+    ///      each its own limit would lend several times over on one salary.
+    function test_overlappingWindowsDoNotMultiplyTheLimit() public {
+        bytes32[] memory cs = new bytes32[](4);
+        for (uint256 i; i < 4; ++i) cs[i] = keccak256(abi.encode("overlap", i));
+
+        bytes32 first = _issueWithCommitments(subject, 4, cs[0], cs[1], cs[2]);
+        bytes32 second = _issueWithCommitments(subject, 4, cs[1], cs[2], cs[3]);
+        assertTrue(first != second, "overlapping windows are distinct credentials");
+
+        vm.startPrank(subject);
+        pool.disburse(first, 750e6);
+
+        assertEq(pool.remainingFor(second), 0, "the second window must add no headroom");
+        vm.expectRevert(abi.encodeWithSelector(DemoCreditPool.ExceedsLimit.selector, 1, 0));
+        pool.disburse(second, 1);
+        vm.stopPrank();
+
+        assertEq(musd.balanceOf(subject), 750e6, "one band 4 limit, not two");
+    }
+
+    /// @dev The cap is the best band proven, so proving more income must still
+    ///      release the difference.
+    function test_aHigherBandUnlocksTheDifference() public {
+        vm.prank(subject);
+        pool.disburse(validCredential, 750e6);
+
+        bytes32 better = _issue(subject, 5, keccak256("band5"));
+        assertEq(pool.limitForBand(5), 1_200e6);
+        assertEq(pool.remainingFor(better), 450e6, "1200 limit less 750 already drawn");
+
+        vm.prank(subject);
+        pool.disburse(better, 450e6);
+        assertEq(musd.balanceOf(subject), 1_200e6);
+    }
+
+    /// @dev A lower band after a larger draw must read as zero, not underflow.
+    function test_aLowerBandAfterALargerDrawReadsAsZero() public {
+        vm.prank(subject);
+        pool.disburse(validCredential, 750e6);
+
+        bytes32 worse = _issue(subject, 1, keccak256("band1"));
+        assertEq(pool.remainingFor(worse), 0);
+
+        vm.prank(subject);
+        vm.expectRevert(abi.encodeWithSelector(DemoCreditPool.ExceedsLimit.selector, 1, 0));
+        pool.disburse(worse, 1);
+    }
+
+    /// @dev One subject's draw must not consume another's headroom.
+    function test_theCapIsPerSubject() public {
+        vm.prank(subject);
+        pool.disburse(validCredential, 750e6);
+
+        bytes32 other = _issue(lowEarner, 1, keccak256("other-earner"));
+        assertEq(pool.remainingFor(other), 150e6, "a different subject is unaffected");
     }
 
     /// @dev Band 0 spans $0-$500. Inside it $50 and $499 are indistinguishable,
@@ -229,7 +302,7 @@ contract DemoCreditPoolTest is Test {
     ///      rather than leave the credential debited for funds never received.
     function test_rejectsATokenThatDeliversLessThanCharged() public {
         SixDecimalFeeToken fee = new SixDecimalFeeToken();
-        DemoCreditPool p = new DemoCreditPool(IERC20(address(fee)), credentials, owner);
+        DemoCreditPool p = new DemoCreditPool(IERC20(address(fee)), credentials, owner, 1);
         fee.mint(address(p), LIQUIDITY);
 
         vm.prank(subject);
@@ -275,6 +348,36 @@ contract DemoCreditPoolTest is Test {
         for (uint256 i; i < 3; ++i) {
             cs[i] = keccak256(abi.encode(seed, i));
         }
+        _attest(cs);
+
+        bytes32[] memory pub = new bytes32[](8);
+        pub[0] = bytes32(uint256(uint160(to)));
+        pub[1] = bytes32(band);
+        for (uint256 i; i < 3; ++i) {
+            pub[2 + i * 2] = bytes32(uint256(cs[i]) >> 128);
+            pub[3 + i * 2] = bytes32(uint256(cs[i]) & type(uint128).max);
+        }
+        uint256 deadline = block.timestamp + 1 hours;
+        return credentials.issue(
+            CredentialRegistry.IssueRequest({
+                proof: hex"01",
+                publicInputs: pub,
+                evidencePayer: payer,
+                documentHash: bytes32(0),
+                deadline: deadline,
+                subjectAuthorization: _auth(to == subject ? subjectPk : lowEarnerPk, to, pub, deadline)
+            })
+        );
+    }
+
+    function _issueWithCommitments(address to, uint256 band, bytes32 c0, bytes32 c1, bytes32 c2)
+        internal
+        returns (bytes32)
+    {
+        bytes32[] memory cs = new bytes32[](3);
+        cs[0] = c0;
+        cs[1] = c1;
+        cs[2] = c2;
         _attest(cs);
 
         bytes32[] memory pub = new bytes32[](8);
