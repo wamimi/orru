@@ -290,6 +290,12 @@ Returns a `txHash`. **Show the Blockscout link prominently** — this is the dem
 final beat, where "approved" becomes "money arrived." Design it as the payoff
 moment, not a toast notification.
 
+Read the headroom from `remainingFor(credentialId)` rather than computing it from
+the band. The cap is **per subject, not per credential**: overlapping windows such
+as periods 5-7 and 6-7-8 are different credentials describing the same income, so
+a second one adds no headroom. A credential in a higher band releases only the
+difference. Funds always go to the credential's subject, never to the caller.
+
 ---
 
 ## 4. Public verifier — `/verify/[id]`
