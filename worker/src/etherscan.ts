@@ -12,8 +12,11 @@ export interface RawLog {
 const BASE = "https://api.etherscan.io/v2/api"
 const PAGE_SIZE = 1000
 
-/// Free-tier Etherscan allows five calls a second.
-const MIN_INTERVAL_MS = Number(process.env.ETHERSCAN_MIN_INTERVAL_MS ?? 250)
+/// Free-tier Etherscan allows three calls a second, and answers a fourth with a
+/// NOTOK body rather than an HTTP error.
+const MIN_INTERVAL_MS = Number(process.env.ETHERSCAN_MIN_INTERVAL_MS ?? 400)
+const MAX_RETRIES = Number(process.env.ETHERSCAN_MAX_RETRIES ?? 5)
+const RATE_LIMITED = /rate limit|too many/i
 let lastCall = 0
 
 async function throttle(): Promise<void> {
@@ -41,18 +44,13 @@ export async function fetchLogs(
   const out: RawLog[] = []
 
   for (let page = 1; ; page++) {
-    await throttle()
-
     const url =
       `${BASE}?chainid=${chainId}&module=logs&action=getLogs` +
       `&address=${address}&topic0=${topic0}` +
       `&fromBlock=${fromBlock}&toBlock=${toBlock}` +
       `&page=${page}&offset=${PAGE_SIZE}&apikey=${apiKey}`
 
-    const response = await fetch(url)
-    if (!response.ok) throw new Error(`Etherscan HTTP ${response.status}`)
-
-    const body = (await response.json()) as { status: string; message: string; result: unknown }
+    const body = await getWithBackoff(url)
 
     // "No records found" comes back as status 0, which is not an error.
     if (body.status !== "1") {
@@ -78,4 +76,43 @@ export async function fetchLogs(
   }
 
   return out
+}
+
+interface EtherscanBody {
+  status: string
+  message: string
+  result: unknown
+}
+
+/// Rate limiting arrives as a 200 with a NOTOK body, so it has to be read out of
+/// the payload rather than the status code. Backs off and retries; anything else
+/// is returned for the caller to interpret.
+async function getWithBackoff(url: string): Promise<EtherscanBody> {
+  let delay = MIN_INTERVAL_MS
+
+  for (let attempt = 0; ; attempt++) {
+    await throttle()
+
+    const response = await fetch(url)
+    if (!response.ok) {
+      if (response.status !== 429 || attempt >= MAX_RETRIES) {
+        throw new Error(`Etherscan HTTP ${response.status}`)
+      }
+    } else {
+      const body = (await response.json()) as EtherscanBody
+      const limited =
+        body.status !== "1" &&
+        typeof body.result === "string" &&
+        RATE_LIMITED.test(body.result)
+
+      if (!limited) return body
+      if (attempt >= MAX_RETRIES) {
+        throw new Error(`Etherscan rate limit persisted after ${MAX_RETRIES} retries: ${body.result}`)
+      }
+    }
+
+    delay *= 2
+    log.warn("etherscan rate limited, backing off", { ms: delay, attempt: attempt + 1 })
+    await new Promise((r) => setTimeout(r, delay))
+  }
 }

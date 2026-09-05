@@ -36,14 +36,20 @@ function optional(name: string, fallback: string): string {
   return value ? value : fallback
 }
 
-function integer(name: string, fallback: number): number {
+function integer(name: string, fallback: number, min = 0): number {
   const raw = process.env[name]?.trim()
   if (!raw) return fallback
   const parsed = Number(raw)
-  if (!Number.isInteger(parsed) || parsed < 0) {
-    throw new ConfigError(`${name} must be a non-negative integer, got ${raw}`)
+  if (!Number.isInteger(parsed) || parsed < min) {
+    throw new ConfigError(`${name} must be an integer >= ${min}, got ${raw}`)
   }
   return parsed
+}
+
+/// For values a loop divides or strides by. Zero there does not mean "unset", it
+/// means a cursor that never advances.
+export function positiveInt(name: string, fallback: number): number {
+  return integer(name, fallback, 1)
 }
 
 function address(name: string, value: string): `0x${string}` {
@@ -122,7 +128,7 @@ export function config(): Config {
     creditcoinRpcUrl: optional("CREDITCOIN_RPC_URL", "https://rpc.cc3-testnet.creditcoin.network"),
     proofBuilderUrl: optional("PROOF_BUILDER_URL", "https://prover.cc3-testnet.creditcoin.network/"),
     sourceChainKey: sourceChainKey(),
-    creditcoinChainId: integer("CREDITCOIN_CHAIN_ID", 102031),
+    creditcoinChainId: positiveInt("CREDITCOIN_CHAIN_ID", 102031),
     payerAnchor: address("PAYER_ANCHOR_ADDRESS", required("PAYER_ANCHOR_ADDRESS")),
     demoPayrolls: addressList("DEMO_PAYROLL_ADDRESS"),
     attestationRegistry: optionalAddress("ATTESTATION_REGISTRY_ADDRESS"),
@@ -131,9 +137,9 @@ export function config(): Config {
     // Attestation needs roughly ten further blocks anyway, so waiting for a few
     // costs nothing and keeps a reorged transaction out of the state file.
     confirmations: integer("WORKER_CONFIRMATIONS", 5),
-    logRange: integer("WORKER_LOG_RANGE", 5_000),
-    checkpoint: integer("WORKER_CHECKPOINT", 2_000),
-    concurrency: integer("WORKER_CONCURRENCY", 8),
+    logRange: positiveInt("WORKER_LOG_RANGE", 5_000),
+    checkpoint: positiveInt("WORKER_CHECKPOINT", 2_000),
+    concurrency: positiveInt("WORKER_CONCURRENCY", 8),
     stateDir: resolve(WORKER_ROOT, optional("WORKER_STATE_DIR", "state")),
     outDir: resolve(WORKER_ROOT, optional("WORKER_OUT_DIR", "out")),
     circuitDir: resolve(REPO_ROOT, "circuits/income_proof"),

@@ -68,7 +68,12 @@ async function status(): Promise<void> {
 
 async function main(): Promise<void> {
   const command = process.argv[2]
-  const limit = Number(option("limit") ?? 10)
+
+  const rawLimit = option("limit")
+  const limit = rawLimit === undefined ? 10 : Number(rawLimit)
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new ConfigError(`--limit must be an integer >= 1, got ${rawLimit}`)
+  }
 
   switch (command) {
     case "scan":
