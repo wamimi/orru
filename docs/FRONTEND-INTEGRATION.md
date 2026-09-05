@@ -714,16 +714,28 @@ In the order I'd do them:
 Four workers are being paid every cycle on the live payroll, in three different
 bands, so the screens have real variety:
 
-| Worker | Band | Range |
-|---|---|---|
-| `0xf6A48D18…0b66C` | 4 | $2,500 – $4,000 |
-| `0xe058c205…cE3B34` | 5 | $4,000 – $6,000 |
-| `0x722533cA…134f27` | 1 | $500 – $1,000 |
-| `0xBb605cf7…Dae75A` | 4 | $2,500 – $4,000 — key held by us, use this one for signing flows |
+| Worker | Band | Range | Key held by |
+|---|---|---|---|
+| `0xf6A48D18…0b66C` | 4 | $2,500 – $4,000 | **you** |
+| `0xBb605cf7…Dae75A` | 4 | $2,500 – $4,000 | Nelly |
+| `0xe058c205…cE3B34` | 5 | $4,000 – $6,000 | unassigned |
+| `0x722533cA…134f27` | 1 | $500 – $1,000 | unassigned |
 
-The first three are demo addresses whose keys we do not hold, so they can produce
-proofs but cannot sign an issuance. **`0xBb605cf7…` is the one to build against**
-for anything involving a signature.
+**Build against `0xf6A48D18…` — that is your own wallet.** It has an attested,
+provable window (periods 2–4, band 4) on Creditcoin right now, which means you
+can run the *entire* flow today, signature and all, up to and including a
+successful `issue`. Nothing is stubbed.
+
+A ready proof bundle for it is at
+`worker/out/proof-0xf6A48D18DA6072eaDdBF5D2BfB9FE9263dE0b66C-2.json`, in exactly
+the `ProofBundle` shape §10c expects. Drop it straight into the issue flow: read
+the nonce, build the typed data, sign with your wallet, post to the relayer. That
+is the whole of §10c working end to end without waiting on browser proving.
+
+The two unassigned addresses are demo workers whose keys nobody holds. They can
+produce proofs, and they are useful for rendering variety on the income and
+verification screens, but they can never sign an issuance — so don't wire a
+signing flow to them.
 
 ### 9f · What we actually keep private — read this before writing any copy
 
