@@ -97,15 +97,26 @@ send() {
   fi
   printf '  sending %s ...\n' "$label"
   local out status
-  out=$(cast send "$@" --rpc-url "$RPC" "${AUTH[@]}" --json 2>&1) \
+  out=$(cast send --rpc-url "$RPC" "${AUTH[@]}" --json "$@" 2>&1) \
     || die "$label failed: $(echo "$out" | tail -3 | tr '\n' ' ')"
-  status=$(echo "$out" | python3 -c 'import sys,json
-for l in sys.stdin:
-    l=l.strip()
-    if l.startswith("{"):
-        try:
-            print(json.loads(l).get("status","")); break
-        except Exception: pass' 2>/dev/null)
+  # Same whole-blob parse as the deploy script: cast send --json is pretty-printed.
+  status=$(printf '%s' "$out" | python3 -c '
+import sys, json, re
+raw = sys.stdin.read()
+found = ""
+i, j = raw.find("{"), raw.rfind("}")
+if i != -1 and j > i:
+    try:
+        found = json.loads(raw[i:j + 1]).get("status", "") or ""
+    except Exception:
+        found = ""
+for pattern in (r"\"status\"\s*:\s*\"(0x[0-9a-fA-F]+)\"", r"^status\s+(\S+)"):
+    if found:
+        break
+    m = re.search(pattern, raw, re.M)
+    found = m.group(1) if m else ""
+print(found)
+' 2>/dev/null)
   # A mined receipt with status 0x0 is a failure, not a success.
   [ "$status" = "0x1" ] || die "$label mined with status=$status"
   ok "$label"

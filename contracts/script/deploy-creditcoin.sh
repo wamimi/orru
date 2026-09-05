@@ -189,7 +189,9 @@ deploy() {
   # swallows any flag that follows it and silently stays in dry-run.
   local cmd=(forge create "$target" --rpc-url "$RPC" "${AUTH[@]}")
   [ ${#LIB_ARGS[@]} -gt 0 ] && cmd+=("${LIB_ARGS[@]}")
-  [ "$BROADCAST" = "1" ] && cmd+=(--broadcast)
+  [ "$BROADCAST" = "1" ] && cmd+=(--broadcast --json)
+  # --constructor-args is variadic and swallows every flag that follows it, so it
+  # is always last. This is the same parsing trap as --broadcast.
   [ $# -gt 0 ] && cmd+=(--constructor-args "$@")
 
   if [ "$BROADCAST" != "1" ]; then
@@ -200,19 +202,34 @@ deploy() {
 
   printf '  deploying %s ...\n' "$key"
   local out addr
-  out=$("${cmd[@]}" --json 2>&1) || die "$key deployment failed: $(echo "$out" | tail -3 | tr '\n' ' ')"
+  out=$("${cmd[@]}" 2>&1) || die "$key deployment failed: $(echo "$out" | tail -3 | tr '\n' ' ')"
 
-  addr=$(echo "$out" | python3 -c "
-import sys,json
-for line in sys.stdin:
-    line=line.strip()
-    if line.startswith('{'):
-        try:
-            d=json.loads(line)
-            if d.get('deployedTo'): print(d['deployedTo']); break
-        except Exception: pass
+  # forge create --json pretty-prints across several lines, so the whole blob is
+  # parsed rather than each line. The regex is the fallback for any output that
+  # is not valid JSON on its own.
+  addr=$(printf '%s' "$out" | python3 -c "
+import sys, json, re
+raw = sys.stdin.read()
+found = ''
+i, j = raw.find('{'), raw.rfind('}')
+if i != -1 and j > i:
+    try:
+        found = json.loads(raw[i:j + 1]).get('deployedTo') or ''
+    except Exception:
+        found = ''
+for pattern in (r'\"deployedTo\"\s*:\s*\"(0x[0-9a-fA-F]{40})\"',
+                r'Deployed to:\s*(0x[0-9a-fA-F]{40})'):
+    if found:
+        break
+    m = re.search(pattern, raw)
+    found = m.group(1) if m else ''
+print(found)
 ")
-  [ -n "$addr" ] || die "$key deployed but no address parsed from: $(echo "$out" | tail -3)"
+  if [ -z "$addr" ]; then
+    printf '  %s\n' "$out" >&2
+    die "$key was deployed but its address could not be parsed. If a contract address appears \
+above, add it to $RECORD by hand and re-run — do NOT deploy again."
+  fi
 
   write_addr "$key" "$addr"
   ok "$key $addr"
