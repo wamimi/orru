@@ -43,12 +43,38 @@ jobs:
           PAYROLL: ${{ secrets.DEMO_PAYROLL_ADDRESS }}
           KEEPER_PK: ${{ secrets.KEEPER_PRIVATE_KEY }}
         run: |
-          set -uo pipefail
+          # -e matters here: without it a failed read leaves an empty variable,
+          # the numeric test errors and evaluates false, and execution falls
+          # through to cast send.
+          set -euo pipefail
 
-          current=$(cast call "$PAYROLL" "currentPeriod()(uint256)"  --rpc-url "$RPC" | awk '{print $1}')
-          next=$(cast call    "$PAYROLL" "nextDuePeriod()(uint256)"  --rpc-url "$RPC" | awk '{print $1}')
-          last=$(cast call    "$PAYROLL" "lastPaidPeriod()(uint256)" --rpc-url "$RPC" | awk '{print $1}')
-          short=$(cast call   "$PAYROLL" "fundingShortfall()(uint256)" --rpc-url "$RPC" | awk '{print $1}')
+          chain=$(cast chain-id --rpc-url "$RPC")
+          if [ "$chain" != "11155111" ]; then
+            echo "::error::RPC reports chain $chain, expected Sepolia (11155111)"
+            exit 1
+          fi
+
+          if [ "$(cast code "$PAYROLL" --rpc-url "$RPC" | tr -d '[:space:]' | wc -c)" -le 2 ]; then
+            echo "::error::no contract code at DEMO_PAYROLL_ADDRESS $PAYROLL"
+            exit 1
+          fi
+
+          read_uint() {
+            local out
+            out=$(cast call "$PAYROLL" "$1" --rpc-url "$RPC" | awk '{print $1}')
+            case "${out:-}" in
+              ''|*[!0-9]*)
+                echo "::error::$1 returned '${out:-}', not a number" >&2
+                return 1
+                ;;
+            esac
+            printf '%s' "$out"
+          }
+
+          current=$(read_uint "currentPeriod()(uint256)")
+          next=$(read_uint    "nextDuePeriod()(uint256)")
+          last=$(read_uint    "lastPaidPeriod()(uint256)")
+          short=$(read_uint   "fundingShortfall()(uint256)")
 
           echo "currentPeriod=$current nextDue=$next lastPaid=$last shortfall=$short"
 
