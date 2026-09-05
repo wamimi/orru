@@ -5,7 +5,7 @@ import { sourceClient } from "./chains.js"
 import { config } from "./config.js"
 import { discoveryBackend, findEvents, newFetcher } from "./discovery.js"
 import { log, short } from "./log.js"
-import { loadState, saveState, type WorkerState } from "./state.js"
+import { loadState, planCursor, saveState, type WorkerState } from "./state.js"
 
 interface AnchoredArgs {
   payer: `0x${string}`
@@ -36,11 +36,29 @@ export async function scan(): Promise<ScanResult> {
   const c = config()
   const state = loadState()
 
-  const head = Number(await sourceClient().getBlockNumber())
+  const client = sourceClient()
+  const head = Number(await client.getBlockNumber())
   const toBlock = head - c.confirmations
-  const fromBlock = Math.max(state.lastScannedBlock + 1, c.startBlock)
+
+  const plan = planCursor(
+    state,
+    c.demoPayrolls,
+    c.startBlock,
+    c.confirmations,
+    await chainAgrees(state.lastScannedBlock, state.lastScannedHash),
+  )
+  if (plan.rewoundTo !== null) {
+    log.warn("rewinding the cursor", { to: plan.rewoundTo, reason: plan.reason ?? "" })
+    state.lastScannedBlock = plan.rewoundTo
+    state.lastScannedHash = undefined
+  }
+  // Recorded once the rewind decision is made, so the next run compares against
+  // the set actually scanned.
+  state.demoPayrolls = c.demoPayrolls
+  const fromBlock = plan.fromBlock
 
   if (toBlock < fromBlock) {
+    saveState(state)
     log.info("nothing new", { head, cursor: state.lastScannedBlock })
     return { fromBlock, toBlock: state.lastScannedBlock, newAnchorTxs: 0, newPayments: 0, mismatches: 0 }
   }
@@ -113,7 +131,14 @@ export async function scan(): Promise<ScanResult> {
             onchain: commitment,
             recomputed,
           })
-          continue
+          // Thrown here, not after the loop: the cursor is saved per checkpoint,
+          // so continuing would advance past the bad block and the next run
+          // would never see it again.
+          throw new Error(
+            `commitment mismatch at ${entry.transactionHash} — shared/commitment.ts computed ` +
+              `${recomputed} but the chain says ${commitment}. The encoding has drifted; ` +
+              `the cursor has not advanced past this block.`,
+          )
         }
 
         if (state.payments.some((p) => p.commitment === commitment)) continue
@@ -133,6 +158,7 @@ export async function scan(): Promise<ScanResult> {
     }
 
     state.lastScannedBlock = end
+    state.lastScannedHash = await blockHash(end)
     saveState(state)
 
     if (end < toBlock) log.info("progress", { at: end, remaining: toBlock - end })
@@ -145,13 +171,30 @@ export async function scan(): Promise<ScanResult> {
     cursor: state.lastScannedBlock,
   })
 
-  if (mismatches > 0) {
-    throw new Error(
-      `${mismatches} commitment(s) did not match shared/commitment.ts — refusing to continue, the encoding has drifted`,
-    )
-  }
-
   return { fromBlock, toBlock, newAnchorTxs, newPayments, mismatches }
+}
+
+/// Whether the chain still has the block the cursor was left on. A false here
+/// means a reorg went deeper than the confirmation window.
+async function chainAgrees(lastScannedBlock: number, recordedHash?: string): Promise<boolean> {
+  if (!recordedHash || lastScannedBlock <= 0) return true
+  try {
+    const block = await sourceClient().getBlock({ blockNumber: BigInt(lastScannedBlock) })
+    return block.hash?.toLowerCase() === recordedHash.toLowerCase()
+  } catch {
+    // The block is gone or unreachable. Treating that as agreement would scan
+    // past a reorg, so assume it does not.
+    return false
+  }
+}
+
+async function blockHash(blockNumber: number): Promise<string | undefined> {
+  try {
+    const block = await sourceClient().getBlock({ blockNumber: BigInt(blockNumber) })
+    return block.hash ?? undefined
+  } catch {
+    return undefined
+  }
 }
 
 export function summarise(state: WorkerState): Record<string, number> {

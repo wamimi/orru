@@ -17,6 +17,10 @@ export interface AnchorTx {
   error?: string
   attempts: number
   lastAttemptAt?: string
+  /// @dev ISO timestamp before which this anchor is not retried. Without it a
+  ///      handful of permanently failing anchors, sorted oldest first, occupy
+  ///      every pass and nothing behind them is ever relayed.
+  nextAttemptAt?: string
 }
 
 export interface PaymentRecord {
@@ -35,6 +39,9 @@ export interface WorkerState {
   payerAnchor: string
   demoPayrolls: string[]
   lastScannedBlock: number
+  /// @dev Hash of `lastScannedBlock`, so a reorg deeper than the confirmation
+  ///      window is detected instead of being scanned past.
+  lastScannedHash?: string
   anchors: Record<string, AnchorTx>
   payments: PaymentRecord[]
 }
@@ -51,7 +58,9 @@ function empty(): WorkerState {
     version: VERSION,
     payerAnchor: c.payerAnchor,
     demoPayrolls: c.demoPayrolls,
-    lastScannedBlock: c.startBlock,
+    // One before the start block: the cursor names the last block SCANNED, and
+    // initialising it to startBlock would skip startBlock itself.
+    lastScannedBlock: Math.max(c.startBlock - 1, 0),
     anchors: {},
     payments: [],
   }
@@ -87,10 +96,40 @@ export function saveState(state: WorkerState): void {
   renameSync(tmp, path)
 }
 
-export function pendingAnchors(state: WorkerState): [string, AnchorTx][] {
+export function pendingAnchors(state: WorkerState, now: number = Date.now()): [string, AnchorTx][] {
   return Object.entries(state.anchors)
     .filter(([, a]) => a.status === "pending" || a.status === "failed")
+    .filter(([, a]) => !a.nextAttemptAt || Date.parse(a.nextAttemptAt) <= now)
     .sort((a, b) => a[1].blockNumber - b[1].blockNumber)
+}
+
+/// Doubles per attempt from one minute, capped at a day. Anything permanently
+/// broken drifts to the back instead of blocking the queue, but nothing is ever
+/// abandoned: a payer approved later still gets its commitments relayed.
+export function backoffMs(attempts: number): number {
+  const base = 60_000
+  const capped = Math.min(Math.max(attempts, 1), 11)
+  return Math.min(base * 2 ** (capped - 1), 86_400_000)
+}
+
+/// The distinct payers named across a set of anchors.
+export function payersOf(anchors: readonly AnchorTx[]): string[] {
+  const seen = new Map<string, string>()
+  for (const a of anchors) {
+    for (const c of a.commitments) seen.set(c.payer.toLowerCase(), c.payer)
+  }
+  return [...seen.values()]
+}
+
+/// Anchors with at least one approved payer. Applied BEFORE any limit, so
+/// unapproved anchors cannot occupy the whole pass.
+export function relayable(
+  anchors: [string, AnchorTx][],
+  approved: ReadonlySet<string>,
+): [string, AnchorTx][] {
+  return anchors.filter(([, a]) =>
+    a.commitments.some((c) => approved.has(c.payer.toLowerCase())),
+  )
 }
 
 /// Payments for one recipient from one payer, oldest period first. The payer
@@ -108,4 +147,51 @@ export function paymentsFor(
     .filter((p) => p.payer.toLowerCase() === payer.toLowerCase())
     .filter((p) => (seen.has(p.commitment) ? false : (seen.add(p.commitment), true)))
     .sort((a, b) => (BigInt(a.period) < BigInt(b.period) ? -1 : 1))
+}
+
+
+/// Payrolls the configured set has that the stored set does not. Their history
+/// predates the cursor, so it would never be scanned without a rewind.
+export function addedPayrolls(stored: readonly string[], configured: readonly string[]): string[] {
+  const known = new Set(stored.map((x) => x.toLowerCase()))
+  return configured.filter((x) => !known.has(x.toLowerCase()))
+}
+
+export interface CursorPlan {
+  fromBlock: number
+  rewoundTo: number | null
+  reason: string | null
+}
+
+/// Where the next scan starts, and whether anything forced it backwards.
+/// `chainAgrees` is false when the stored hash no longer matches the chain at
+/// `lastScannedBlock`, which means a reorg went deeper than the confirmations.
+export function planCursor(
+  state: Pick<WorkerState, "lastScannedBlock" | "demoPayrolls">,
+  configured: readonly string[],
+  startBlock: number,
+  confirmations: number,
+  chainAgrees: boolean,
+): CursorPlan {
+  const floor = Math.max(startBlock - 1, 0)
+
+  const added = addedPayrolls(state.demoPayrolls, configured)
+  if (added.length > 0) {
+    return {
+      fromBlock: startBlock,
+      rewoundTo: floor,
+      reason: `payroll added (${added.join(", ")}) — its history predates the cursor`,
+    }
+  }
+
+  if (!chainAgrees) {
+    const rewound = Math.max(state.lastScannedBlock - confirmations * 2, floor)
+    return {
+      fromBlock: rewound + 1,
+      rewoundTo: rewound,
+      reason: "the chain no longer agrees with the recorded block hash — reorg",
+    }
+  }
+
+  return { fromBlock: Math.max(state.lastScannedBlock + 1, startBlock), rewoundTo: null, reason: null }
 }
