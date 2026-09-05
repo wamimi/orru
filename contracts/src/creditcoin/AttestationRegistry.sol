@@ -20,8 +20,16 @@ contract AttestationRegistry is USCBase, Ownable {
 
     bytes32 public constant PAYMENT_ANCHORED_SIG = keccak256("PaymentAnchored(address,bytes32)");
 
-    /// @dev Bounds the log loop over caller-supplied receipt data.
+    /// @dev Bounds how many TRUSTED_ANCHOR logs one receipt may carry. Counted
+    ///      after the trust filter: one source transaction is one query, so
+    ///      letting lookalike logs count here would let anything that can emit
+    ///      alongside a genuine anchor bury that payment permanently.
     uint256 public constant MAX_LOGS_PER_RECEIPT = 32;
+
+    /// @dev Bounds the scan over caller-supplied receipt data. Reverting rather
+    ///      than truncating leaves the query unconsumed, so an oversized receipt
+    ///      fails retryably instead of silently dropping commitments.
+    uint256 public constant MAX_RECEIPT_LOGS = 256;
 
     mapping(address payer => bool approved) public approvedPayer;
     mapping(bytes32 commitment => bool accepted) public acceptedCommitment;
@@ -47,6 +55,7 @@ contract AttestationRegistry is USCBase, Ownable {
     error UnsupportedTransactionType(uint8 txType);
     error NoTrustedLogs();
     error TooManyLogs(uint256 count, uint256 max);
+    error TooManyReceiptLogs(uint256 count, uint256 max);
 
     constructor(uint64 sourceChainKey, address trustedAnchor, address initialOwner)
         Ownable(initialOwner)
@@ -86,8 +95,25 @@ contract AttestationRegistry is USCBase, Ownable {
         EvmV1Decoder.LogEntry[] memory logs =
             EvmV1Decoder.getLogsByEventSignature(receipt, PAYMENT_ANCHORED_SIG);
 
-        if (logs.length > MAX_LOGS_PER_RECEIPT) {
-            revert TooManyLogs(logs.length, MAX_LOGS_PER_RECEIPT);
+        if (logs.length > MAX_RECEIPT_LOGS) {
+            revert TooManyReceiptLogs(logs.length, MAX_RECEIPT_LOGS);
+        }
+
+        // Counted in its own scope, before the main loop: the cap must apply to
+        // logs that survived the trust filter, and `via_ir` is unavailable here
+        // so the counter must not stay live alongside the loop below.
+        {
+            uint256 trusted;
+            for (uint256 i; i < logs.length; ++i) {
+                if (_isTrustedAnchorLog(logs[i])) {
+                    unchecked {
+                        ++trusted;
+                    }
+                }
+            }
+            if (trusted > MAX_LOGS_PER_RECEIPT) {
+                revert TooManyLogs(trusted, MAX_LOGS_PER_RECEIPT);
+            }
         }
 
         uint256 accepted;
@@ -97,9 +123,7 @@ contract AttestationRegistry is USCBase, Ownable {
         for (uint256 i; i < logs.length; ++i) {
             EvmV1Decoder.LogEntry memory log = logs[i];
 
-            if (log.address_ != TRUSTED_ANCHOR) continue;
-            if (log.topics.length != 3) continue;
-            if (log.topics[0] != PAYMENT_ANCHORED_SIG) continue;
+            if (!_isTrustedAnchorLog(log)) continue;
 
             address payer = address(uint160(uint256(log.topics[1])));
             if (!approvedPayer[payer]) continue;
@@ -130,5 +154,12 @@ contract AttestationRegistry is USCBase, Ownable {
         }
 
         if (accepted == 0) revert NoTrustedLogs();
+    }
+
+    /// @dev A log the application will consider at all: emitted by the trusted
+    ///      anchor, and shaped like PaymentAnchored(address,bytes32).
+    function _isTrustedAnchorLog(EvmV1Decoder.LogEntry memory log) internal view returns (bool) {
+        return log.address_ == TRUSTED_ANCHOR && log.topics.length == 3
+            && log.topics[0] == PAYMENT_ANCHORED_SIG;
     }
 }

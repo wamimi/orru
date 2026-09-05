@@ -180,6 +180,42 @@ contract AttestationRegistryTest is Test {
         _submit(_receipt(1, logs));
     }
 
+    /// @dev One source transaction is one Attestcoin query, consumable once. If
+    ///      lookalike logs count toward the cap before the trust filter runs,
+    ///      anything that can emit alongside a genuine anchor buries that
+    ///      payment permanently.
+    function test_lookalikeLogsCannotBuryAGenuineAnchor() public {
+        uint256 noise = registry.MAX_LOGS_PER_RECEIPT();
+        EvmV1Decoder.LogEntryTuple[] memory logs = new EvmV1Decoder.LogEntryTuple[](noise + 1);
+        for (uint256 i; i < noise; ++i) {
+            logs[i] = _log(impostor, payer, keccak256(abi.encode("noise", i)));
+        }
+        bytes32 real = keccak256("genuine-alongside-noise");
+        logs[noise] = _log(anchorContract, payer, real);
+
+        _submit(_receipt(1, logs));
+
+        assertTrue(registry.acceptedCommitment(real), "the genuine anchor must still be accepted");
+        assertTrue(registry.acceptedByPayer(real, payer));
+    }
+
+    /// @dev The scan bound still exists; reverting keeps the query unconsumed,
+    ///      so an oversized receipt fails retryably rather than losing logs.
+    function test_rejectsAnOversizedReceipt() public {
+        uint256 n = registry.MAX_RECEIPT_LOGS() + 1;
+        EvmV1Decoder.LogEntryTuple[] memory logs = new EvmV1Decoder.LogEntryTuple[](n);
+        for (uint256 i; i < n; ++i) {
+            logs[i] = _log(impostor, payer, keccak256(abi.encode("bulk", i)));
+        }
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                AttestationRegistry.TooManyReceiptLogs.selector, n, registry.MAX_RECEIPT_LOGS()
+            )
+        );
+        _submit(_receipt(1, logs));
+    }
+
     function test_onlyOwnerApprovesPayers() public {
         vm.prank(impostor);
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, impostor));
