@@ -140,3 +140,44 @@ test("accepted and submitted anchors are never re-queued", () => {
   }
   assert.deepEqual(pendingAnchors(worldWith(entries)).map(([id]) => id), ["0xtodo"])
 })
+
+// ----------------------------------------------------------- window picking
+
+import { pickWindow } from "./prove.js"
+import type { PaymentRecord } from "./state.js"
+
+function rec(period: number): PaymentRecord {
+  return {
+    payer: "0xAA" as `0x${string}`,
+    recipient: "0xBB" as `0x${string}`,
+    amount: "2500000000",
+    period: String(period),
+    salt: "0x00" as `0x${string}`,
+    commitment: `0xc${period}` as `0x${string}`,
+    txHash: "0x00" as `0x${string}`,
+    blockNumber: period,
+  }
+}
+
+test("the newest consecutive run wins", () => {
+  const w = pickWindow([2, 3, 4, 9, 10, 11].map(rec), 3)
+  assert.deepEqual(w?.map((p) => p.period), ["9", "10", "11"])
+})
+
+test("a gap at the end falls back to the older complete run", () => {
+  const w = pickWindow([2, 3, 4, 9, 11].map(rec), 3)
+  assert.deepEqual(w?.map((p) => p.period), ["2", "3", "4"])
+})
+
+test("no consecutive run returns null rather than a wrong window", () => {
+  assert.equal(pickWindow([1, 3, 5, 7].map(rec), 3), null)
+})
+
+test("exactly enough periods is a valid window", () => {
+  const w = pickWindow([15, 16, 17].map(rec), 3)
+  assert.deepEqual(w?.map((p) => p.period), ["15", "16", "17"])
+})
+
+test("fewer records than periods returns null", () => {
+  assert.equal(pickWindow([15, 16].map(rec), 3), null)
+})

@@ -36,7 +36,7 @@ export async function prove(options: ProveOptions): Promise<ProofBundle> {
   const subject = getAddress(options.recipient)
   const payer = getAddress(options.payer)
 
-  const window = selectWindow(subject, payer, options)
+  const window = await selectWindow(subject, payer, options)
   const band = bandForWindow(window)
 
   log.step("building proof", {
@@ -84,7 +84,24 @@ export async function prove(options: ProveOptions): Promise<ProofBundle> {
 
 /// The newest run of PERIODS consecutive periods. The circuit requires
 /// `periods[i] == periods[i-1] + 1`, so a gap makes the window unprovable.
-function selectWindow(subject: `0x${string}`, payer: `0x${string}`, options: ProveOptions): PaymentRecord[] {
+/// The newest run of PERIODS consecutive periods within `records`. Pure, so the
+/// selection rule can be tested without a chain.
+export function pickWindow(records: PaymentRecord[], periods: number): PaymentRecord[] | null {
+  for (let end = records.length - 1; end >= periods - 1; end--) {
+    const window = records.slice(end - periods + 1, end + 1)
+    const consecutive = window.every(
+      (p, i) => i === 0 || BigInt(p.period) === BigInt(window[i - 1]!.period) + 1n,
+    )
+    if (consecutive) return window
+  }
+  return null
+}
+
+async function selectWindow(
+  subject: `0x${string}`,
+  payer: `0x${string}`,
+  options: ProveOptions,
+): Promise<PaymentRecord[]> {
   const state = loadState()
   const all = paymentsFor(state, subject, payer)
 
@@ -94,35 +111,74 @@ function selectWindow(subject: `0x${string}`, payer: `0x${string}`, options: Pro
     )
   }
 
-  const anchoredByPayer = new Set(
+  if (options.allowUnattested) {
+    const window = pickWindow(all, PERIODS)
+    if (!window) {
+      throw new Error(
+        `no ${PERIODS} consecutive periods for ${subject} — recorded periods: ` +
+          all.map((p) => p.period).join(", "),
+      )
+    }
+    return window
+  }
+
+  // Anchored on Sepolia is not the same as attested on Creditcoin. Selecting on
+  // the former picks the newest window the payroll emitted, which is usually the
+  // one the relayer has not reached yet — and the proof then cannot be issued.
+  const anchored = new Set(
     Object.values(state.anchors)
       .flatMap((a) => a.commitments)
       .filter((x) => isAddressEqual(x.payer, payer))
       .map((x) => x.commitment.toLowerCase()),
   )
 
-  const eligible = options.allowUnattested
-    ? all
-    : all.filter((p) => anchoredByPayer.has(p.commitment.toLowerCase()))
+  const attested = await attestedCommitments(
+    all.filter((p) => anchored.has(p.commitment.toLowerCase())),
+    payer,
+  )
+  const eligible = all.filter((p) => attested.has(p.commitment.toLowerCase()))
 
   if (eligible.length < PERIODS) {
     throw new Error(
-      `need ${PERIODS} payments anchored by ${payer}, found ${eligible.length} for ${subject}`,
+      `need ${PERIODS} attested payments from ${payer}, found ${eligible.length} for ${subject}. ` +
+        `Run \`npm run attest -- --submit\` first.`,
     )
   }
 
-  for (let end = eligible.length - 1; end >= PERIODS - 1; end--) {
-    const window = eligible.slice(end - PERIODS + 1, end + 1)
-    const consecutive = window.every(
-      (p, i) => i === 0 || BigInt(p.period) === BigInt(window[i - 1]!.period) + 1n,
+  const window = pickWindow(eligible, PERIODS)
+  if (!window) {
+    throw new Error(
+      `no ${PERIODS} consecutive ATTESTED periods for ${subject} — attested periods: ` +
+        eligible.map((p) => p.period).join(", ") +
+        `. Attest more anchors and retry.`,
     )
-    if (consecutive) return window
+  }
+  return window
+}
+
+/// Which of these commitments the registry has accepted for this payer.
+async function attestedCommitments(
+  records: PaymentRecord[],
+  payer: `0x${string}`,
+): Promise<Set<string>> {
+  const registry = config().attestationRegistry
+  if (!registry) {
+    throw new Error("ATTESTATION_REGISTRY_ADDRESS is not set — deploy it, or pass --allow-unattested")
   }
 
-  throw new Error(
-    `no ${PERIODS} consecutive periods for ${subject} — recorded periods: ` +
-      eligible.map((p) => p.period).join(", "),
-  )
+  const cc = creditcoinClient()
+  const accepted = new Set<string>()
+
+  for (const p of records) {
+    const ok = await cc.readContract({
+      address: registry,
+      abi: attestationRegistryAbi,
+      functionName: "acceptedByPayer",
+      args: [p.commitment, payer],
+    })
+    if (ok) accepted.add(p.commitment.toLowerCase())
+  }
+  return accepted
 }
 
 function bandForWindow(window: PaymentRecord[]): { id: number; label: string } {
