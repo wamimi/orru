@@ -2,9 +2,14 @@
 
 **For:** whoever is designing and building the Next.js app
 **From:** contracts + circuits
-**Status:** the Ethereum side is live; the Creditcoin side is specified here and
-being built to match. Treat the signatures below as a commitment — if I have to
-change one, I'll flag it before it lands.
+**Status:** **everything is deployed and wired on both chains.** Sepolia payroll,
+Attestcoin verification on Creditcoin, the ZK verifier, the credential registry
+and the credit pool are all live, and the pipeline has been run end to end with
+real payments. Every address and signature below is read from a live deployment,
+not planned. Nothing here is waiting on me.
+
+Two things are still open and both are listed in §9 — the issue/disburse tooling,
+and everything on your side.
 
 ---
 
@@ -45,21 +50,41 @@ loading states too, which is where it usually leaks.
 
 ---
 
-## 1. Status — what you can build against today
+## 1. Live addresses
 
-| Contract | Chain | Status |
-|---|---|---|
-| `PayerAnchor` | Sepolia | **live** |
-| `DemoPayroll` | Sepolia | **live**, cron running |
-| `AttestationRegistry` | Creditcoin | specified, building |
-| `IncomeVerifier` (+ `ZKTranscriptLib`) | Creditcoin | generated from the circuit, not yet deployed |
-| `NullifierRegistry` | Creditcoin | specified, building |
-| `CredentialRegistry` | Creditcoin | specified, building |
-| `DemoCreditPool` + `mUSDC` | Creditcoin | specified, building |
+All deployed and wired. Fourteen post-deployment checks pass, including that the
+credential registry points at the right attestation registry and verifier, that
+the pool is funded, and that the verifier really links its library.
 
-Addresses land in `contracts/deployments/<chainid>.json` as each is deployed.
-**Read them from there** rather than hardcoding — they will change at least once
-more.
+**Creditcoin testnet — chain id 102031**
+
+| Contract | Address |
+|---|---|
+| `CredentialRegistry` | `0xc4694C8db29C668Bebb2502664228156F11a8481` |
+| `AttestationRegistry` | `0x47172643d148300d2649C475d68a5bD49267e60C` |
+| `DemoCreditPool` | `0x1B906254Ceca488c301E7063d437c8B18da10e9e` |
+| `mUSDC` (settlement) | `0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d` |
+| `IncomeVerifier` | `0x9c9C73aC2de017A47aF61b742147ee3f22a5e593` |
+| `NullifierRegistry` | `0x8750311a947B6DC775C053904b106B57028fFE1D` |
+
+**Ethereum Sepolia — chain id 11155111** (the frontend never calls these)
+
+| Contract | Address |
+|---|---|
+| `PayerAnchor` | `0x16EaB9DA91D2AEea1F1138A95E42C37d1D47B7d2` |
+| `DemoPayroll` | `0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d` |
+| `dUSD` (payment token) | `0xc4694C8db29C668Bebb2502664228156F11a8481` |
+
+> **Two addresses appear on both lists and are unrelated contracts.**
+> `0xD3a8Fd44…` is the payroll on Sepolia and mUSDC on Creditcoin;
+> `0xc4694C8d…` is dUSD on Sepolia and the credential registry on Creditcoin.
+> Same deployer, same nonce, two chains — `CREATE` addresses are
+> `hash(sender, nonce)`, so they collide. **Always key your address book by
+> chain id.** Reading the wrong one gets you a contract that answers some calls
+> and reverts others, which is a horrible afternoon.
+
+Canonical source is `contracts/deployments/<chainid>.json`. Read from there in
+build tooling rather than pasting, so a redeploy is one file change.
 
 ### Network config you'll need
 
@@ -78,8 +103,33 @@ export const creditcoinTestnet = {
 Explorer links: `https://creditcoin-testnet.blockscout.com/tx/{hash}`. Sepolia
 links (for evidence panels): `https://sepolia.etherscan.io/tx/{hash}`.
 
-**USDC has 6 decimals, not 18.** Anything you format from a raw amount must
-divide by 1e6. This is the single most likely numeric bug in the app.
+**Six decimals, not eighteen.** Both tokens. Anything you format from a raw
+amount divides by `1e6`. This is the single most likely numeric bug in the app.
+
+### Paste-ready address book
+
+```ts
+// src/lib/chain.ts
+export const CREDITCOIN_ID = 102031 as const
+export const SEPOLIA_ID = 11155111 as const
+
+export const ADDRESSES = {
+  [CREDITCOIN_ID]: {
+    credentialRegistry:  '0xc4694C8db29C668Bebb2502664228156F11a8481',
+    attestationRegistry: '0x47172643d148300d2649C475d68a5bD49267e60C',
+    creditPool:          '0x1B906254Ceca488c301E7063d437c8B18da10e9e',
+    settlementToken:     '0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d', // mUSDC
+    verifier:            '0x9c9C73aC2de017A47aF61b742147ee3f22a5e593',
+  },
+  [SEPOLIA_ID]: {
+    payerAnchor:  '0x16EaB9DA91D2AEea1F1138A95E42C37d1D47B7d2',
+    demoPayroll:  '0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d',
+    paymentToken: '0xc4694C8db29C668Bebb2502664228156F11a8481', // dUSD
+  },
+} as const
+```
+
+Keyed by chain id on purpose — see the collision warning above.
 
 ---
 
@@ -132,12 +182,12 @@ money."* Users are conditioned to fear signature prompts; defuse it inline.
   "payerName": "Orru Demo Payroll",       // resolved from the payer registry
   "payerAddress": "0x...",
   "payerTier": 1,                          // 1 = seeded, 2 = many-payees rule
-  "periodsVerified": 3,
+  "periodsAttested": 12,                   // everything verified on Creditcoin
   "evidencePayer": "0x...",                // all periods must share one payer
-  "periodsConsecutive": true,              // false blocks credential issuance
-  "firstPeriod": 1,
-  "latestPeriod": 6,
-  "incomeBand": { "id": 2, "label": "$2,000–3,000 / month" },
+  "provableWindow": {                      // the newest 3 CONSECUTIVE attested
+    "from": 15, "to": 17, "consecutive": true
+  },
+  "incomeBand": { "id": 4, "label": "$2,500 – $4,000" },
   "evidence": [                            // one row per verified period — M12
     {
       "period": 4,
@@ -150,8 +200,14 @@ money."* Users are conditioned to fear signature prompts; defuse it inline.
 }
 ```
 
+**Attested is not the same as provable.** The circuit needs **three consecutive**
+periods, and a worker can easily have twelve attested with a gap in the middle.
+`provableWindow` is the window a proof would actually be built over; if it is
+`null`, issuance is blocked even though `periodsAttested` looks healthy. Render
+the count from `periodsAttested` and gate the button on `provableWindow`.
+
 **UI:** the three-line checklist animation from the spec. Each line resolves in
-sequence — "Looking at your payment history ✓ 6 payments found", "Confirming who
+sequence — "Looking at your payment history ✓ 12 payments found", "Confirming who
 paid you ✓ Verified employer", "Checking your income pattern ⟳". Since the data
 is already there, pace the animation deliberately rather than tying it to actual
 latency.
@@ -167,8 +223,13 @@ where the trust model becomes visible.
   recognised payer. **This is the self-payment case** and it must read as a
   neutral explanation, not an accusation: *"We couldn't recognise who paid you.
   Orru only counts payments from employers, platforms and grant programmes."*
-- `reason: "not_consecutive"` — there's a gap in the record
-- `reason: "too_few_periods"` — fewer than 3 periods
+- `reason: "not_consecutive"` — payments exist and are verified, but no three of
+  them run back to back. Real and worth designing: *"Your payments look
+  irregular. Orru needs three pay cycles in a row."*
+- `reason: "too_few_periods"` — fewer than 3 verified periods
+- `reason: "not_yet_verified"` — payments found on Ethereum but not yet confirmed
+  on Creditcoin. Transient, clears on its own within minutes. *"We're still
+  confirming your most recent payments."*
 
 ### S4 · Your income profile
 
@@ -182,11 +243,11 @@ This is where the proof is generated and the credential is issued.
 
 | | |
 |---|---|
-| **Action** | Generate the proof in-browser, then submit via relayer |
+| **Action** | Generate the proof **in the browser**, sign, then submit via relayer |
 | **Call** | bb.js in a Web Worker → `POST /api/credential/issue` |
 | **Chain** | Creditcoin (relayer sends it) |
 | **Gas** | paid by relayer |
-| **Latency** | **5–40s for proving**, then ~15s for the transaction |
+| **Latency** | 10–40s proving, then ~15s for the transaction |
 
 ```
 POST /api/credential/issue
@@ -200,22 +261,27 @@ authorize issuance. The second is an EIP-712 typed-data signature over the proof
 the public inputs, the payer, the document hash, a nonce and a deadline — without
 it anyone could issue a credential for someone else's address.
 
-Build it with `signTypedData`. The domain is `{ name: 'Orru', version: '1',
-chainId: 102031, verifyingContract: <CredentialRegistry> }`; the contract also
-exposes `domainSeparator()` and `nonces(address)`. Smart accounts work via
-ERC-1271.
+Build it with `signTypedData`. **The exact domain, types and message are in
+§8c** — copy them from there rather than retyping, particularly
+`publicInputsHash`, which is `keccak256(concat(publicInputs))` and not
+`encodeAbiParameters`. Smart accounts work via ERC-1271.
 
 **UI:** treat it as part of the same "issuing your credential" step, not a
 separate screen. Say *"Sign to issue your credential — this is free."*
 
-**This is the only genuinely slow step in the app.** Budget for up to 40 seconds
-and design a real progress experience — staged messages, not a spinner. Never say
-"generating proof"; say "Checking your income pattern."
+**This is the only genuinely slow step in the app, and it has to stay in the
+browser.** That is what keeps the amounts on the user's machine — §9a.1. Budget
+10–40 seconds and design a real progress experience: staged messages, not a
+spinner. Never say "generating proof"; say "Checking your income pattern."
 
-**You must also handle the server-side fallback.** If browser proving fails or
-takes too long, we fall back to `POST /api/prove` server-side. The UI should not
-distinguish them — same screen, same copy. This fallback exists specifically so
-the demo cannot hang, so please don't surface it as an error.
+Warm the Web Worker early — during S3, while the user is reading their income —
+so the WASM and SRS download is already done by the time they press the button.
+That is most of the perceived latency and it is free to hide.
+
+**The credential ID is deterministic**: `keccak256(CLAIM_DOMAIN, subject, C0, C1,
+C2)`, derivable before you submit via `claimKeyFor(publicInputs, subject)`. You
+can render the verification link optimistically and reconcile when the
+transaction lands.
 
 ### S6 · Consent
 
@@ -314,7 +380,7 @@ date fields are resolved by the API from the stored source block height:
   "revokedAt": null,
   "subjectAddress": "0x...",
   "walletBindingProven": true,
-  "incomeBand": { "id": 2, "label": "$2,000–3,000 / month" },
+  "incomeBand": { "id": 4, "label": "$2,500 – $4,000" },
   "periodsProven": 3,
   // derived by the API from evidenceEndHeight; the registry stores the height
   "verificationPeriod": { "from": "2026-08-27", "to": "2026-09-08" },
@@ -347,15 +413,23 @@ Design it as a real part of the page, not fine print.
 
 ## 5. Timing budget
 
+Measured on the live deployment, not estimated.
+
 | Step | Time | Blocking? |
 |---|---|---|
 | Wallet connect + signature | instant | yes |
 | Income lookup (S3) | 1–3s | yes |
-| **Browser proof generation** | **5–40s** | **yes** |
+| **Browser proof generation** | **10–40s** (plus a one-time ~30MB WASM/SRS fetch) | **yes** |
 | Creditcoin transaction | ~15s | yes |
-| Attestcoin verification | ~10 min | **no — background, before the session** |
+| Attestcoin verification | 20–30s per batch once attested | **no — background, before the session** |
+| Source block becoming attested | minutes | **no — background** |
 
-Only one step needs a designed waiting experience. Everything else can use
+Two seconds is what the circuit takes **natively**, in the worker. That number is
+not available to the app, because proving in the browser is what keeps the
+amounts on the user's machine — see §9a.1. In-browser bb.js on a cold cache is
+10–40 seconds, and that is the number to design for.
+
+Browser proving is still the only genuinely slow step. Everything else can use
 ordinary loading states.
 
 ---
@@ -445,7 +519,540 @@ directly — but two things matter:
   time compression so history accrues inside the hackathon window; that is
   disclosed, and the amounts themselves are not manipulated.
 
-## 8. Reference
+## 8. Contract reference
+
+Everything below is read from the live deployment. Three contracts matter to the
+app; the rest are internal.
+
+### 8a · viem ABI fragments
+
+```ts
+// src/lib/abi.ts
+import { parseAbi } from 'viem'
+
+export const credentialRegistryAbi = parseAbi([
+  // reads — the public verifier page uses only these
+  'function statusOf(bytes32 credentialId) view returns (uint8)',
+  'function credentialOf(bytes32 credentialId) view returns ((address subject,address evidencePayer,uint8 band,uint8 periodsProven,uint64 issuedAt,uint64 evidenceEndHeight,uint64 revokedAt,bytes32 documentHash))',
+  'function nonces(address subject) view returns (uint256)',
+  'function domainSeparator() view returns (bytes32)',
+  'function claimKeyFor(bytes32[] publicInputs, address subject) view returns (bytes32)',
+  'function PERIODS() view returns (uint256)',
+  'function PUBLIC_INPUTS() view returns (uint256)',
+  // writes — relayer only, never the user
+  'function issue((bytes proof,bytes32[] publicInputs,address evidencePayer,bytes32 documentHash,uint256 deadline,bytes subjectAuthorization) req) returns (bytes32)',
+  'function revoke(bytes32 credentialId)',
+  // events
+  'event CredentialIssued(bytes32 indexed credentialId, address indexed subject, address indexed evidencePayer, uint8 band, uint64 evidenceEndHeight, bytes32 documentHash)',
+  'event CredentialRevoked(bytes32 indexed credentialId, address indexed revokedBy)',
+])
+
+export const creditPoolAbi = parseAbi([
+  'function remainingFor(bytes32 credentialId) view returns (uint256)',
+  'function drawnBySubject(address subject) view returns (uint256)',
+  'function limitForBand(uint8 band) pure returns (uint256)',
+  'function minimumEvidenceHeight() view returns (uint64)',
+  'function disburse(bytes32 credentialId, uint256 amount)',
+  'event Disbursed(bytes32 indexed credentialId, address indexed subject, uint256 amount, uint256 remaining)',
+])
+
+export const attestationRegistryAbi = parseAbi([
+  'function acceptedByPayer(bytes32 commitment, address payer) view returns (bool)',
+  'function provenAtHeight(bytes32 commitment, address payer) view returns (uint64)',
+  'function approvedPayer(address payer) view returns (bool)',
+  'event CommitmentAccepted(bytes32 indexed commitment, address indexed payer, bytes32 indexed queryId, uint64 blockHeight)',
+])
+```
+
+### 8b · `statusOf` returns a uint8, not a string
+
+```ts
+export const CREDENTIAL_STATUS = ['unknown', 'valid', 'revoked'] as const
+```
+
+`0` unknown · `1` valid · `2` revoked. **Render on `statusOf`, never on the
+presence of a record** — `credentialOf` returns a populated struct for a revoked
+credential too. A revoked credential rendering as valid is negative test #8.
+
+### 8c · The EIP-712 signature for issuance
+
+This is the only typed-data signature in the app. The user signs it; the relayer
+submits it.
+
+```ts
+const domain = {
+  name: 'Orru',
+  version: '1',
+  chainId: 102031,
+  verifyingContract: ADDRESSES[CREDITCOIN_ID].credentialRegistry,
+} as const
+
+const types = {
+  Issue: [
+    { name: 'proofHash',        type: 'bytes32' },
+    { name: 'publicInputsHash', type: 'bytes32' },
+    { name: 'evidencePayer',    type: 'address' },
+    { name: 'documentHash',     type: 'bytes32' },
+    { name: 'nonce',            type: 'uint256' },
+    { name: 'deadline',         type: 'uint256' },
+  ],
+} as const
+
+const message = {
+  proofHash:        keccak256(proof),                        // bytes
+  publicInputsHash: keccak256(concat(publicInputs)),         // NOT encodeAbiParameters
+  evidencePayer,
+  documentHash,                                              // 0x00..00 if none
+  nonce:    await registry.read.nonces([subject]),
+  deadline: BigInt(Math.floor(Date.now() / 1000) + 3600),
+}
+```
+
+**`publicInputsHash` is `keccak256(abi.encodePacked(publicInputs))`** — the eight
+32-byte words concatenated, *not* ABI-encoded with an offset and length. In viem
+that is `keccak256(concat(publicInputs))`. Getting this wrong produces a
+signature that fails with `InvalidSubjectAuthorization` and looks like a wallet
+problem. It is the most likely integration bug in this document.
+
+The nonce increments on every successful issuance, so read it fresh each time.
+Smart accounts work unchanged via ERC-1271.
+
+### 8d · Errors, and what to say when you catch them
+
+Every revert is a custom error. Decode with the ABI and map to copy that obeys
+the vocabulary rule in §0.
+
+| Error | What actually happened | Suggested copy |
+|---|---|---|
+| `CommitmentNotAttestedToPayer` | evidence isn't verified on Creditcoin yet | "We're still confirming your payments. Try again in a few minutes." |
+| `InvalidSubjectAuthorization` | signature wrong, or signed by the wrong wallet | "That signature didn't match this wallet." |
+| `AuthorizationExpired` | deadline passed | "That took too long — let's try again." |
+| `CredentialExists` | same evidence already issued | "You already have a statement for this period." |
+| `InvalidProof` | proof failed verification | "Something went wrong checking your income." |
+| `WrongPublicInputCount` | wrong number of public inputs | never user-facing — a bug, log it |
+| `CredentialNotValid` | revoked or unknown at disburse | "This statement is no longer active." |
+| `ExceedsLimit(requested, remaining)` | asked for more than the headroom | "The most available right now is {remaining}." |
+| `EvidenceTooOld(given, minimum)` | evidence below the pool's freshness floor | "This statement is based on older payments." |
+| `InsufficientLiquidity` | the pool is dry | "We can't complete this right now." — and alert us |
+
+The verifier itself **reverts rather than returning false** on a bad proof, so a
+tampered proof surfaces as `SumcheckFailed`, not `InvalidProof`. Treat any
+unrecognised revert from `issue` as a verification failure.
+
+---
+
+## 9. What I need from you
+
+Contracts, circuits, deployment and the off-chain worker are done. Everything
+still open is on the app side, so this is the list that decides whether we ship.
+
+### 9a · Three decisions I need before I can help further
+
+**1. Browser proving — this one is not really a choice.** The proving pipeline
+works (`worker/src/prove.ts`, ~2s natively), and I can expose it as a server
+route. **Do not build the product on that.**
+
+Proving server-side means the private witness — the actual amounts — is sent to
+our server. That is the exact disclosure the zero-knowledge proof exists to
+prevent. It would work, it would be fast, and it would make the central claim
+false: the first judge who asks "so who sees the salary?" gets the answer "their
+server does," and the pitch is over.
+
+So: **bb.js in a Web Worker, in the browser.** I'll export the circuit artifacts
+and a worker entry point. Budget 10–40 seconds for a ~58,000-gate circuit plus a
+one-time WASM and SRS download, and design the staged waiting experience for it.
+
+A server route may still exist as an explicitly **disclosed** break-glass path if
+the browser fails — shown to the user, chosen by the user, never silent. See §9f
+for the honest limits of what we currently keep private.
+
+**2. Who runs the relayer, and where?** `issue` and `disburse` are permissionless
+but somebody pays gas on Creditcoin. If your API routes send them, you need a
+funded Creditcoin key in the Next.js environment — send me the address and I'll
+fund it. If you'd rather not hold a key, say so and I'll put a small relayer
+service behind an endpoint you call.
+
+**3. Which API routes are yours?** This document specifies about a dozen. I've
+assumed you own all of `src/app/api/**` since you own `src/`. If you'd rather I
+write the chain-touching ones — `/api/income/:address`, `/api/verify/:id`,
+`/api/credential/issue`, `/api/credit/disburse` — say so today and I'll do them;
+they're the four that need contract knowledge.
+
+### 9b · What I need handed back
+
+- **A Creditcoin address** for the relayer, so I can fund it with CTC.
+- **Confirmation you've read §0 and §8c.** The two-signature model and the
+  `publicInputsHash` encoding are the two things that will silently cost a day
+  each if they're wrong.
+- **A rough order** you'll build the screens in, so I can prioritise the API
+  routes you hit first rather than guessing.
+
+### 9c · Already done — please don't rebuild these
+
+- **The off-chain worker.** Watching Sepolia, waiting for attestation, submitting
+  proofs to Creditcoin — all built, tested and running (`worker/`). This was
+  originally on your list; it isn't any more.
+- **Proof generation.** `npm run prove` in `worker/` produces a verified proof
+  bundle as JSON: subject, band, periods, commitments, proof, publicInputs.
+- **Everything on-chain.** Deployed, wired, and exercised end to end.
+
+### 9d · What only you can build
+
+In the order I'd do them:
+
+1. **`/verify/[id]`** — the public page. Highest demo value per hour, needs no
+   wallet, no auth, and only two contract reads. Build this first; it's the
+   screen most likely to be opened by a judge on their own phone.
+2. **S2 → S5 consumer flow** — connect, review, issue. The main narrative.
+3. **`/report/[id]`** — the read-only lender page from §7.3. About an hour, and
+   it restores the M9 beat.
+4. **S6 consent** — small, but it's negative test #10 and it's checked.
+5. **S8 agreement upload** — optional, only if the rest is done.
+
+### 9e · Test data that exists right now
+
+Four workers are being paid every cycle on the live payroll, in three different
+bands, so the screens have real variety:
+
+| Worker | Band | Range |
+|---|---|---|
+| `0xf6A48D18…0b66C` | 4 | $2,500 – $4,000 |
+| `0xe058c205…cE3B34` | 5 | $4,000 – $6,000 |
+| `0x722533cA…134f27` | 1 | $500 – $1,000 |
+| `0xBb605cf7…Dae75A` | 4 | $2,500 – $4,000 — key held by us, use this one for signing flows |
+
+The first three are demo addresses whose keys we do not hold, so they can produce
+proofs but cannot sign an issuance. **`0xBb605cf7…` is the one to build against**
+for anything involving a signature.
+
+### 9f · What we actually keep private — read this before writing any copy
+
+Be precise here, because overclaiming is worse than the limitation.
+
+**What the credential discloses:** the subject address, the payer address, a
+band, a period count, and the source block height of the newest payment. **Never
+an amount.** A lender reading it on Creditcoin learns the band and nothing
+sharper. That property is real and enforced by the circuit.
+
+**What is public anyway, today:** the salary, three separate ways, none of which
+involve the commitment at all.
+
+1. `DemoPayroll.amountOf(address)` is a **public mapping**. One `eth_call`
+   returns any worker's exact pay.
+2. `PaymentMade` emits `amount` in the clear.
+3. The ERC-20 `Transfer` log carries the amount in its data, as every ERC-20
+   transfer does.
+
+The salt is also deterministic — `keccak256(abi.encode(payroll, recipient,
+period))` — so the commitment is **binding, not hiding**. But that is not why the
+salary is public. It is public because an on-chain payroll pays on-chain. No
+commitment scheme can conceal a transfer that anyone can watch.
+
+**So do not describe the commitment as protecting anything.** It binds a payment
+to a value that Attestcoin can authenticate. That is its job, and it does it.
+
+**This is still exactly why proving stays in the browser.** The public payroll is
+a property of *this demo payer* — a real deployment attests payments that were
+not themselves public, and then the salt genuinely matters and the amount is
+genuinely secret. A server that proves on the user's behalf is a leak in the
+*architecture*, which no change of payer would ever undo. One is a demo choosing
+a transparent payer for demonstrability; the other would be the design being
+wrong.
+
+If you find yourself writing "your income stays private," change it to something
+you can defend: *"Your exact pay never goes into your statement — only a range."*
+
+---
+
+## 10. Implementation guide
+
+Working code for the three chain-touching surfaces. Written to be followed
+directly — the addresses, ABIs and field names are all from the live deployment.
+
+### 10a · Setup
+
+```bash
+npm i viem wagmi @tanstack/react-query
+```
+
+```ts
+// src/lib/clients.ts
+import { createPublicClient, defineChain, http } from 'viem'
+
+export const creditcoin = defineChain({
+  id: 102031,
+  name: 'Creditcoin Testnet',
+  nativeCurrency: { name: 'Creditcoin', symbol: 'CTC', decimals: 18 },
+  rpcUrls: { default: { http: ['https://rpc.cc3-testnet.creditcoin.network'] } },
+  blockExplorers: {
+    default: { name: 'Blockscout', url: 'https://creditcoin-testnet.blockscout.com' },
+  },
+  testnet: true,
+})
+
+export const creditcoinClient = createPublicClient({
+  chain: creditcoin,
+  transport: http(),
+})
+```
+
+Use `ADDRESSES` from §1 and the ABIs from §8a.
+
+### 10b · `/verify/[id]` — build this first
+
+Two reads, no wallet, no auth. Server component; nothing here runs on the client.
+
+```tsx
+// src/app/verify/[id]/page.tsx
+import { creditcoinClient } from '@/lib/clients'
+import { credentialRegistryAbi } from '@/lib/abi'
+import { ADDRESSES, CREDITCOIN_ID } from '@/lib/chain'
+import { BANDS } from '@/../shared/bands'
+
+const STATUS = ['unknown', 'valid', 'revoked'] as const
+
+export default async function VerifyPage({ params }: { params: { id: string } }) {
+  const address = ADDRESSES[CREDITCOIN_ID].credentialRegistry
+  const id = params.id as `0x${string}`
+
+  const [statusCode, credential] = await Promise.all([
+    creditcoinClient.readContract({
+      address, abi: credentialRegistryAbi, functionName: 'statusOf', args: [id],
+    }),
+    creditcoinClient.readContract({
+      address, abi: credentialRegistryAbi, functionName: 'credentialOf', args: [id],
+    }),
+  ])
+
+  const status = STATUS[Number(statusCode)] ?? 'unknown'
+  if (status === 'unknown') return <UnknownStatement />
+
+  const band = BANDS[credential.band]
+
+  return (
+    <Statement
+      status={status}                                   // drives valid vs revoked
+      band={band}                                       // NEVER an amount
+      periods={credential.periodsProven}
+      issuedAt={new Date(Number(credential.issuedAt) * 1000)}
+      revokedAt={credential.revokedAt === 0n ? null : new Date(Number(credential.revokedAt) * 1000)}
+      evidenceEndHeight={credential.evidenceEndHeight}  // resolve to a date via Sepolia
+    />
+  )
+}
+```
+
+**Render on `status`, never on whether `credentialOf` returned data** — it returns
+a populated struct for revoked credentials too. That is negative test #8.
+
+`evidenceEndHeight` is a Sepolia block number. Resolve it to a date server-side
+with `getBlock({ blockNumber })` against a Sepolia RPC and cache it; it never
+changes for a given credential.
+
+### 10c · The issue flow, end to end
+
+Three steps: get a proof, sign it, hand it to the relayer.
+
+```ts
+// src/lib/issue.ts
+import { keccak256, concat, type Hex } from 'viem'
+import { creditcoinClient } from './clients'
+import { credentialRegistryAbi } from './abi'
+import { ADDRESSES, CREDITCOIN_ID } from './chain'
+
+export interface ProofBundle {
+  subject: `0x${string}`
+  evidencePayer: `0x${string}`
+  band: number
+  periods: string[]
+  commitments: Hex[]
+  proof: Hex
+  publicInputs: Hex[]
+}
+
+export async function buildIssueTypedData(bundle: ProofBundle, documentHash: Hex = `0x${'00'.repeat(32)}`) {
+  const verifyingContract = ADDRESSES[CREDITCOIN_ID].credentialRegistry
+
+  const nonce = await creditcoinClient.readContract({
+    address: verifyingContract,
+    abi: credentialRegistryAbi,
+    functionName: 'nonces',
+    args: [bundle.subject],
+  })
+
+  return {
+    domain: { name: 'Orru', version: '1', chainId: 102031, verifyingContract },
+    types: {
+      Issue: [
+        { name: 'proofHash',        type: 'bytes32' },
+        { name: 'publicInputsHash', type: 'bytes32' },
+        { name: 'evidencePayer',    type: 'address' },
+        { name: 'documentHash',     type: 'bytes32' },
+        { name: 'nonce',            type: 'uint256' },
+        { name: 'deadline',         type: 'uint256' },
+      ],
+    },
+    primaryType: 'Issue' as const,
+    message: {
+      proofHash:        keccak256(bundle.proof),
+      // abi.encodePacked of a bytes32[] is plain concatenation. NOT
+      // encodeAbiParameters, which would add an offset and a length word.
+      publicInputsHash: keccak256(concat(bundle.publicInputs)),
+      evidencePayer:    bundle.evidencePayer,
+      documentHash,
+      nonce,
+      deadline: BigInt(Math.floor(Date.now() / 1000) + 3600),
+    },
+  }
+}
+```
+
+In the component:
+
+```tsx
+const { signTypedDataAsync } = useSignTypedData()
+
+async function issue(bundle: ProofBundle) {
+  const typed = await buildIssueTypedData(bundle)
+  const signature = await signTypedDataAsync(typed)          // the user's 2nd signature
+
+  const res = await fetch('/api/credential/issue', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      proof: bundle.proof,
+      publicInputs: bundle.publicInputs,
+      evidencePayer: bundle.evidencePayer,
+      documentHash: typed.message.documentHash,
+      deadline: typed.message.deadline.toString(),
+      subjectAuthorization: signature,
+    }),
+  })
+  return res.json() as Promise<{ credentialId: Hex; txHash: Hex }>
+}
+```
+
+And the relayer route, which is the only place a private key appears:
+
+```ts
+// src/app/api/credential/issue/route.ts
+import { createWalletClient, http } from 'viem'
+import { privateKeyToAccount } from 'viem/accounts'
+import { creditcoin } from '@/lib/clients'
+import { credentialRegistryAbi } from '@/lib/abi'
+import { ADDRESSES, CREDITCOIN_ID } from '@/lib/chain'
+
+export async function POST(req: Request) {
+  const body = await req.json()
+
+  const relayer = createWalletClient({
+    account: privateKeyToAccount(process.env.RELAYER_PRIVATE_KEY as `0x${string}`),
+    chain: creditcoin,
+    transport: http(),
+  })
+
+  const txHash = await relayer.writeContract({
+    address: ADDRESSES[CREDITCOIN_ID].credentialRegistry,
+    abi: credentialRegistryAbi,
+    functionName: 'issue',
+    args: [{
+      proof: body.proof,
+      publicInputs: body.publicInputs,
+      evidencePayer: body.evidencePayer,
+      documentHash: body.documentHash,
+      deadline: BigInt(body.deadline),
+      subjectAuthorization: body.subjectAuthorization,
+    }],
+  })
+
+  // The id is deterministic — derive it rather than parsing the receipt.
+  const credentialId = await creditcoinClient.readContract({
+    address: ADDRESSES[CREDITCOIN_ID].credentialRegistry,
+    abi: credentialRegistryAbi,
+    functionName: 'claimKeyFor',
+    args: [body.publicInputs, subjectFrom(body.publicInputs)],
+  })
+
+  return Response.json({ credentialId, txHash })
+}
+
+// publicInputs[0] is the subject, left-padded to 32 bytes.
+const subjectFrom = (pub: `0x${string}`[]) => `0x${pub[0].slice(26)}` as `0x${string}`
+```
+
+### 10d · Disburse
+
+```ts
+const remaining = await creditcoinClient.readContract({
+  address: ADDRESSES[CREDITCOIN_ID].creditPool,
+  abi: creditPoolAbi,
+  functionName: 'remainingFor',
+  args: [credentialId],
+})
+```
+
+Then `disburse(credentialId, amount)` from the same relayer. Funds always go to
+the credential's subject, never to the caller, so there is no recipient argument
+to get wrong.
+
+**Read the headroom from `remainingFor`, never compute it from the band.** The
+cap is per subject: two overlapping windows are two credentials describing one
+income, and the second adds no headroom.
+
+### 10e · Decoding errors into copy
+
+```ts
+import { decodeErrorResult, BaseError, ContractFunctionRevertedError } from 'viem'
+
+export function friendlyError(err: unknown): string {
+  if (err instanceof BaseError) {
+    const revert = err.walk(e => e instanceof ContractFunctionRevertedError)
+    if (revert instanceof ContractFunctionRevertedError) {
+      switch (revert.data?.errorName) {
+        case 'CommitmentNotAttestedToPayer':
+          return "We're still confirming your payments. Try again in a few minutes."
+        case 'InvalidSubjectAuthorization':
+          return "That signature didn't match this wallet."
+        case 'AuthorizationExpired':
+          return "That took too long — let's try again."
+        case 'CredentialExists':
+          return 'You already have a statement for these pay cycles.'
+        case 'ExceedsLimit':
+          return `The most available right now is ${format(revert.data.args?.[1])}.`
+        case 'CredentialNotValid':
+          return 'This statement is no longer active.'
+      }
+    }
+  }
+  return 'Something went wrong. Please try again.'
+}
+```
+
+The full error list is in §8d. Anything unrecognised from `issue` — including
+`SumcheckFailed` from the verifier — is a verification failure, not a bug in the
+wallet.
+
+### 10f · Getting a proof into the browser
+
+This is the piece I still owe you. To prove in-browser you need three artifacts
+from the circuit:
+
+- `income_proof.json` — the compiled ACIR
+- `vk` — the verification key
+- the Barretenberg SRS, fetched once and cached
+
+Say the word and I'll commit them under `public/circuit/` with a
+`src/lib/prove.worker.ts` that takes the same witness shape the worker uses
+(`amounts`, `periods`, `salts`, `recipient`, `band`, `commitments`) and returns
+`{ proof, publicInputs }` ready for §10c.
+
+Until then, `worker/out/proof-*.json` files have exactly the `ProofBundle` shape
+above and can be dropped into the flow as fixtures, so every screen can be built
+and tested before browser proving lands.
+
+---
+
+## 11. Reference
 
 - Product spec: `docs/SPEC.md` · Scope and screens: `docs/MVP.md`
 - Chain constraints: `docs/ATTESTCOIN.md`
