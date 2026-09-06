@@ -41,10 +41,14 @@ export async function findEvents<TArgs>(
           transactionHash: entry.transactionHash,
         })
       } catch (error) {
-        log.warn("undecodable log skipped", {
-          tx: entry.transactionHash,
-          reason: error instanceof Error ? error.message : String(error),
-        })
+        // The address and topic already matched, so this log IS one of ours.
+        // Skipping it would advance the cursor past a real payment that could
+        // then never be proven. Fail the scan and leave the cursor alone.
+        throw new Error(
+          `undecodable ${event.name} log in ${entry.transactionHash} at block ` +
+            `${entry.blockNumber}: ${error instanceof Error ? error.message : String(error)}. ` +
+            `The cursor has not advanced; re-run to retry.`,
+        )
       }
     }
     return out

@@ -128,9 +128,25 @@ export function buildSnapshot(): Snapshot {
     // history, so it is only meaningful once a window exists.
     let band: { id: number; label: string } | null = null
     if (window) {
-      const bands = window.map((p) => bandFor(BigInt(p.amount)))
-      const first = bands[0]!
-      band = bands.every((b) => b.id === first.id) ? { id: first.id, label: first.label } : null
+      // bandFor puts the offending amount in its error message. That amount is
+      // the private witness, and this error would otherwise reach stderr and
+      // any log collector behind it.
+      let bands
+      try {
+        bands = window.map((p) => bandFor(BigInt(p.amount)))
+      } catch {
+        log.warn("a payment amount has no band; excluded from the snapshot", {
+          recipient,
+          payer,
+          periods: window.map((p) => p.period).join(","),
+        })
+        bands = null
+      }
+
+      if (bands) {
+        const first = bands[0]!
+        band = bands.every((b) => b.id === first.id) ? { id: first.id, label: first.label } : null
+      }
     }
 
     let reason: RecipientSnapshot["reason"]

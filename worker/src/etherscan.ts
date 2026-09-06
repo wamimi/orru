@@ -1,3 +1,4 @@
+import { ConfigError } from "./config.js"
 import { log } from "./log.js"
 
 export interface RawLog {
@@ -14,13 +15,28 @@ const PAGE_SIZE = 1000
 
 /// Free-tier Etherscan allows three calls a second, and answers a fourth with a
 /// NOTOK body rather than an HTTP error.
-const MIN_INTERVAL_MS = Number(process.env.ETHERSCAN_MIN_INTERVAL_MS ?? 400)
-const MAX_RETRIES = Number(process.env.ETHERSCAN_MAX_RETRIES ?? 5)
+/// Read on use, not at import: a bad value thrown during module evaluation
+/// escapes the CLI's error handler and surfaces as a stack trace.
+///
+/// A non-numeric value here used to become NaN, and `attempt >= NaN` is never
+/// true — so a persistent rate limit retried forever instead of giving up.
+function bounded(name: string, fallback: number, min: number): number {
+  const raw = process.env[name]?.trim()
+  if (!raw) return fallback
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < min) {
+    throw new ConfigError(`${name} must be an integer >= ${min}, got ${raw}`)
+  }
+  return parsed
+}
+
+const minIntervalMs = () => bounded("ETHERSCAN_MIN_INTERVAL_MS", 400, 0)
+const maxRetries = () => bounded("ETHERSCAN_MAX_RETRIES", 5, 0)
 const RATE_LIMITED = /rate limit|too many/i
 let lastCall = 0
 
 async function throttle(): Promise<void> {
-  const wait = lastCall + MIN_INTERVAL_MS - Date.now()
+  const wait = lastCall + minIntervalMs() - Date.now()
   if (wait > 0) await new Promise((r) => setTimeout(r, wait))
   lastCall = Date.now()
 }
@@ -40,6 +56,12 @@ export async function fetchLogs(
 ): Promise<RawLog[]> {
   const apiKey = process.env.ETHERSCAN_API_KEY?.trim()
   if (!apiKey) throw new Error("ETHERSCAN_API_KEY is not set")
+
+  // Validated here rather than at import, so a bad value is reported by the
+  // CLI's handler instead of escaping as a stack trace — and on every scan
+  // rather than only when a rate limit happens to be hit.
+  minIntervalMs()
+  maxRetries()
 
   const out: RawLog[] = []
 
@@ -88,14 +110,14 @@ interface EtherscanBody {
 /// the payload rather than the status code. Backs off and retries; anything else
 /// is returned for the caller to interpret.
 async function getWithBackoff(url: string): Promise<EtherscanBody> {
-  let delay = MIN_INTERVAL_MS
+  let delay = minIntervalMs()
 
   for (let attempt = 0; ; attempt++) {
     await throttle()
 
     const response = await fetch(url)
     if (!response.ok) {
-      if (response.status !== 429 || attempt >= MAX_RETRIES) {
+      if (response.status !== 429 || attempt >= maxRetries()) {
         throw new Error(`Etherscan HTTP ${response.status}`)
       }
     } else {
@@ -106,8 +128,8 @@ async function getWithBackoff(url: string): Promise<EtherscanBody> {
         RATE_LIMITED.test(body.result)
 
       if (!limited) return body
-      if (attempt >= MAX_RETRIES) {
-        throw new Error(`Etherscan rate limit persisted after ${MAX_RETRIES} retries: ${body.result}`)
+      if (attempt >= maxRetries()) {
+        throw new Error(`Etherscan rate limit persisted after ${maxRetries()} retries: ${body.result}`)
       }
     }
 
