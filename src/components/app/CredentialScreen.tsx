@@ -32,7 +32,7 @@ export function CredentialScreen() {
         <Callout
           tone="error"
           title="Status could not be read"
-          body="The issuance record was not found. Without it, a lender cannot check this credential."
+          body="The issuance record was not found. Without it, this credential cannot be checked."
           actionLabel="Back to profile"
           actionHref="/profile"
         />
@@ -44,8 +44,8 @@ export function CredentialScreen() {
     return (
       <ScreenFrame kicker="04 · Credential" title="Loading the credential.">
         <div className="grid gap-8 md:grid-cols-2" aria-busy="true">
-          <div className="h-56 rounded-card bg-canvas-raised" />
-          <div className="h-56 rounded-card bg-canvas-raised" />
+          <div className="h-56 bg-canvas-raised" />
+          <div className="h-56 bg-canvas-raised" />
         </div>
       </ScreenFrame>
     );
@@ -55,24 +55,24 @@ export function CredentialScreen() {
     <ScreenFrame
       kicker="04 · Credential"
       title="This is what leaves."
-      lede="A lender sees a band and a status. They do not see amounts, names, or your full history."
+      lede="Whoever you send it to sees a band and a status. They do not see amounts, names, or your full history."
     >
-      <div className="grid gap-12 md:grid-cols-2">
-        <div>
-          <p className="eyebrow text-brand">Shared with the lender</p>
-          <div className="mt-4">
+      <div className="grid gap-12 md:grid-cols-2 md:gap-16">
+        <div className="border-t-2 border-brand pt-6 md:pt-8">
+          <h2 className="display-md text-ink">Shared</h2>
+          <div className="mt-6">
             <SharedFields fields={sharedWithLender} />
           </div>
         </div>
-        <div>
-          <p className="eyebrow text-ink-faint">Never included</p>
-          <div className="mt-4">
+        <div className="border-t-2 border-rule-strong pt-6 md:pt-8">
+          <h2 className="display-md text-ink-faint">Withheld</h2>
+          <div className="mt-6">
             <HiddenFields fields={withheldFromLender} />
           </div>
         </div>
       </div>
 
-      <p className="meta mt-10 text-ink-faint">
+      <p className="meta mt-12 text-ink-faint">
         {demoCredential.id}
         <span className="mx-3 text-rule-strong">·</span>
         {demoCredential.issuanceRef}

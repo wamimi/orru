@@ -8,18 +8,20 @@ export function AudienceDoor({
   body,
 }: {
   href: string;
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   body: string;
 }) {
   return (
     <Link
       href={href}
-      className="group flex flex-col justify-between gap-10 border-t-2 border-rule-strong pt-6 transition-tone duration-200 hover:border-brand md:pt-8"
+      className="group flex h-full flex-col justify-between gap-10 border-t-2 border-rule-strong pt-6 transition-tone duration-200 hover:border-brand md:pt-8"
     >
       <div>
-        <p className="eyebrow text-ink-faint">{eyebrow}</p>
-        <h3 className="display-lg mt-4 max-w-sm text-ink transition-tone duration-200 group-hover:text-brand">
+        {eyebrow ? <p className="eyebrow text-ink-faint">{eyebrow}</p> : null}
+        <h3
+          className={`display-lg max-w-sm text-ink transition-tone duration-200 group-hover:text-brand ${eyebrow ? "mt-4" : ""}`}
+        >
           {title}
         </h3>
       </div>

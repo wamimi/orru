@@ -87,7 +87,7 @@ export function WaitlistForm({
         </p>
       ) : (
         <p className="mt-3 text-center text-sm text-fog">
-          Early access for remote workers and payroll platforms.
+          Early access for workers, fintechs, and anyone who needs to show they earn.
         </p>
       )}
     </div>

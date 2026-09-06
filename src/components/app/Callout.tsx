@@ -16,18 +16,22 @@ export function Callout({
   actionHref?: string;
   children?: ReactNode;
 }) {
-  const border =
+  const rule =
     tone === "error"
-      ? "border-[color:var(--ev-failed-fg)]/25"
-      : "border-rule";
+      ? "border-[color:var(--ev-failed-fg)]"
+      : tone === "empty"
+        ? "border-ink-faint"
+        : "border-rule-strong";
 
   return (
-    <div className={`rounded-card border bg-paper px-5 py-5 ${border}`}>
-      <p className="display-sm text-ink">{title}</p>
-      <p className="mt-2 text-[0.9375rem] leading-relaxed text-ink-soft">{body}</p>
+    <div className={`border-t-2 pt-6 md:pt-8 ${rule}`}>
+      <p className="display-md max-w-md text-ink">{title}</p>
+      <p className="mt-3 max-w-md text-[0.9375rem] leading-relaxed text-ink-soft">
+        {body}
+      </p>
       {children}
       {actionLabel && actionHref ? (
-        <div className="mt-5">
+        <div className="mt-6">
           <ButtonLink href={actionHref}>{actionLabel}</ButtonLink>
         </div>
       ) : null}

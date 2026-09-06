@@ -79,9 +79,7 @@ export function ProfileScreen() {
   if (outcome === "loading") {
     return (
       <ScreenFrame kicker="03 · Profile" title="Loading your income profile.">
-        <div className="max-w-md" aria-busy="true">
-          <div className="h-72 rounded-card border border-rule bg-canvas-raised" />
-        </div>
+        <div className="h-72 max-w-md border border-rule bg-canvas-raised" aria-busy="true" />
       </ScreenFrame>
     );
   }
@@ -157,9 +155,7 @@ export function ProfileScreen() {
   if (!qa && !session.income) {
     return (
       <ScreenFrame kicker="03 · Profile" title="Loading your income profile.">
-        <div className="max-w-md" aria-busy="true">
-          <div className="h-72 rounded-card border border-rule bg-canvas-raised" />
-        </div>
+        <div className="h-72 max-w-md border border-rule bg-canvas-raised" aria-busy="true" />
       </ScreenFrame>
     );
   }
@@ -174,13 +170,25 @@ export function ProfileScreen() {
       kicker="03 · Profile"
       title="Your income, as a band."
       lede="This is what the credential will say. Exact payment amounts are not part of it."
+      aside={<CredentialCard data={card} />}
     >
-      <div className="max-w-md">
-        <CredentialCard data={card} />
-      </div>
+      <ul className="max-w-md">
+        <li className="border-t border-rule py-4">
+          <p className="display-sm text-ink">A band, not a number</p>
+          <p className="mt-1 text-sm leading-relaxed text-ink-soft">
+            The individual payment amounts are never written into this credential.
+          </p>
+        </li>
+        <li className="border-t border-rule py-4">
+          <p className="display-sm text-ink">You choose who sees it</p>
+          <p className="mt-1 text-sm leading-relaxed text-ink-soft">
+            Sharing is a separate step. Nothing is sent until you confirm.
+          </p>
+        </li>
+      </ul>
       <div className="mt-10 flex flex-wrap gap-3">
         <ButtonLink href="/credential">
-          See what a lender sees
+          See what gets shared
           <ArrowRight size={18} />
         </ButtonLink>
         <ButtonLink href="/consent" variant="outline">

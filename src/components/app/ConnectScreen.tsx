@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLogin, usePrivy, useSignMessage, useWallets } from "@privy-io/react-auth";
-import { ArrowRight, PenNib, Plugs } from "@phosphor-icons/react";
+import { ArrowRight } from "@phosphor-icons/react";
+import { ActionStep } from "@/components/app/ActionStep";
 import { Callout } from "@/components/app/Callout";
 import { ScreenFrame } from "@/components/app/ScreenFrame";
 import { useFlowSession } from "@/components/app/useFlowSession";
@@ -239,59 +240,50 @@ export function ConnectScreen() {
       ) : null}
 
       {!forcedEmpty && !networkError ? (
-        <ol className="divide-y divide-rule border-y border-rule">
-          <li className="flex flex-col gap-4 py-6 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex gap-4">
-              <Plugs size={20} className="mt-0.5 shrink-0 text-brand" />
-              <div>
-                <p className="display-sm text-ink">Connect the address</p>
-                <p className="mt-1 max-w-md text-sm leading-relaxed text-ink-soft">
-                  We only read the address. No permission is granted to send
-                  funds.
-                </p>
-                {connected && displayAddress ? (
-                  <p className="meta mt-3 text-ink">{displayAddress}</p>
-                ) : null}
-              </div>
-            </div>
-            <Button
-              onClick={() => void onConnect()}
-              disabled={connected || forcedLoading || (!qa && !privyReady)}
-              className="shrink-0"
-            >
-              {forcedLoading || connect === "working"
-                ? "Looking…"
-                : connected
-                  ? "Connected"
-                  : "Connect"}
-            </Button>
-          </li>
-
-          <li className="flex flex-col gap-4 py-6 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex gap-4">
-              <PenNib size={20} className="mt-0.5 shrink-0 text-brand" />
-              <div>
-                <p className="display-sm text-ink">Sign a short message</p>
-                <p className="mt-1 max-w-md text-sm leading-relaxed text-ink-soft">
-                  The message says this address is yours. Signing costs nothing
-                  and can be cancelled. This is free and moves no money.
-                </p>
-              </div>
-            </div>
-            <Button
-              onClick={() => void onSign()}
-              disabled={!connected || signed || forcedLoading}
-              variant={connected ? "solid" : "outline"}
-              className="shrink-0"
-            >
-              {sign === "working"
-                ? "Waiting…"
-                : signed
-                  ? "Signed"
-                  : "Sign"}
-            </Button>
-          </li>
-        </ol>
+        <div className="flex flex-col gap-10">
+          <ActionStep
+            number="01"
+            title="Connect the address"
+            body="We only read the address. No permission is granted to send funds."
+            complete={connected}
+            meta={
+              connected && displayAddress ? (
+                <p className="meta text-ink">{displayAddress}</p>
+              ) : null
+            }
+            action={
+              <Button
+                onClick={() => void onConnect()}
+                disabled={connected || forcedLoading || (!qa && !privyReady)}
+              >
+                {forcedLoading || connect === "working"
+                  ? "Looking…"
+                  : connected
+                    ? "Connected"
+                    : "Connect"}
+              </Button>
+            }
+          />
+          <ActionStep
+            number="02"
+            title="Sign a short message"
+            body="The message says this address is yours. Signing costs nothing and can be cancelled. This is free and moves no money."
+            complete={signed}
+            action={
+              <Button
+                onClick={() => void onSign()}
+                disabled={!connected || signed || forcedLoading}
+                variant={connected ? "solid" : "outline"}
+              >
+                {sign === "working"
+                  ? "Waiting…"
+                  : signed
+                    ? "Signed"
+                    : "Sign"}
+              </Button>
+            }
+          />
+        </div>
       ) : null}
 
       <div className="mt-10 flex flex-wrap items-center gap-4">
