@@ -8,6 +8,7 @@ import { attestationRegistryAbi } from "./abi.js"
 import { creditcoinClient } from "./chains.js"
 import { config } from "./config.js"
 import { log, short } from "./log.js"
+import { slipsAsPayments } from "./slips.js"
 import { loadState, paymentsFor, type PaymentRecord } from "./state.js"
 
 /// Must match circuits/income_proof/src/main.nr and CredentialRegistry.PERIODS.
@@ -84,6 +85,14 @@ export async function prove(options: ProveOptions): Promise<ProofBundle> {
 
 /// The newest run of PERIODS consecutive periods. The circuit requires
 /// `periods[i] == periods[i-1] + 1`, so a gap makes the window unprovable.
+/// Union of two payment sources, deduplicated by commitment, oldest period first.
+export function mergeByCommitment(a: PaymentRecord[], b: PaymentRecord[]): PaymentRecord[] {
+  const seen = new Set<string>()
+  return [...a, ...b]
+    .filter((p) => (seen.has(p.commitment) ? false : (seen.add(p.commitment), true)))
+    .sort((x, y) => (BigInt(x.period) < BigInt(y.period) ? -1 : 1))
+}
+
 /// The newest run of PERIODS consecutive periods within `records`. Pure, so the
 /// selection rule can be tested without a chain.
 export function pickWindow(records: PaymentRecord[], periods: number): PaymentRecord[] | null {
@@ -103,7 +112,12 @@ async function selectWindow(
   options: ProveOptions,
 ): Promise<PaymentRecord[]> {
   const state = loadState()
-  const all = paymentsFor(state, subject, payer)
+  // Scanned PaymentMade events, plus any off-chain slips the recipient holds for
+  // this payer. A payer that never publishes amounts produces only the latter.
+  const all = mergeByCommitment(
+    paymentsFor(state, subject, payer),
+    slipsAsPayments(subject, payer),
+  )
 
   if (all.length === 0) {
     throw new Error(
