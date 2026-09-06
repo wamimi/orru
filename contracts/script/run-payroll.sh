@@ -22,7 +22,9 @@ LOG="$LOG_DIR/payroll.log"
 
 log() { printf '%s  %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*" >> "$LOG"; }
 
-set -a; . ./.env 2>/dev/null; set +a
+# Overridable so the guards can be exercised without touching the live config.
+ENV_FILE="${ORRU_ENV_FILE:-./.env}"
+set -a; . "$ENV_FILE" 2>/dev/null; set +a
 
 for v in SEPOLIA_RPC_URL DEMO_PAYROLL_ADDRESS KEEPER_ACCOUNT KEEPER_PASSWORD_FILE; do
   if [ -z "${!v:-}" ]; then log "FATAL  $v is not set in contracts/.env"; exit 1; fi
@@ -36,14 +38,33 @@ fi
 P="$DEMO_PAYROLL_ADDRESS"
 RPC="$SEPOLIA_RPC_URL"
 
+# Deployment addresses collide across chains — same deployer, same nonce. If the
+# RPC is repointed, this would settle periods on whatever chain answers while the
+# real payroll silently misses its cycle.
+chain=$(cast chain-id --rpc-url "$RPC" 2>/dev/null)
+if [ "$chain" != "11155111" ]; then
+  log "FATAL  RPC reports chain '${chain:-unreachable}', expected Sepolia (11155111)"
+  exit 1
+fi
+
+if [ "$(cast code "$P" --rpc-url "$RPC" 2>/dev/null | tr -d '[:space:]' | wc -c)" -le 2 ]; then
+  log "FATAL  no contract code at DEMO_PAYROLL_ADDRESS $P on Sepolia"
+  exit 1
+fi
+
 current=$(cast call "$P" "currentPeriod()(uint256)" --rpc-url "$RPC" 2>/dev/null | awk '{print $1}')
 next=$(cast call    "$P" "nextDuePeriod()(uint256)"  --rpc-url "$RPC" 2>/dev/null | awk '{print $1}')
 last=$(cast call    "$P" "lastPaidPeriod()(uint256)" --rpc-url "$RPC" 2>/dev/null | awk '{print $1}')
 
-if [ -z "$current" ] || [ -z "$next" ] || [ -z "$last" ]; then
-  log "ERROR  could not read period state - RPC down or wrong address?"
-  exit 1
-fi
+for pair in "current:$current" "next:$next" "last:$last"; do
+  name="${pair%%:*}"; value="${pair#*:}"
+  case "$value" in
+    ''|*[!0-9]*)
+      log "ERROR  $name read as '${value:-empty}', not a number - RPC down or wrong address?"
+      exit 1
+      ;;
+  esac
+done
 
 # nextDuePeriod can exceed current even when current != last, so comparing
 # those two alone would send a reverting transaction.

@@ -241,10 +241,15 @@ try:
 except Exception:
     print(0)
 " || true)
-  if [ "${want:-0}" -gt 0 ] && [ "${#onchain}" != "$want" ]; then
+  # An unreadable artifact must not read as agreement. Length is a weak check —
+  # different bytecode of the same length passes — but silently skipping it is
+  # worse, because the readback then claims something it never verified.
+  if [ "${want:-0}" -le 0 ]; then
+    bad "$label could not be compared: $artifact is missing or unreadable (run forge build)"
+  elif [ "${#onchain}" != "$want" ]; then
     bad "$label at $addr is ${#onchain} chars of code, the local build is $want — different library"
   else
-    ok "$label $addr matches the local build"
+    ok "$label $addr length matches the local build"
   fi
 
   # The linked address is baked into the consumer's runtime code.
