@@ -157,8 +157,19 @@ export async function scan(): Promise<ScanResult> {
       }
     }
 
+    // The hash is what makes a later reorg detectable. Advancing without it
+    // leaves a cursor that `chainAgrees` reads as agreement, which is fail-open
+    // exactly where the check exists to fail closed.
+    const hash = await blockHash(end)
+    if (!hash) {
+      throw new Error(
+        `scanned to block ${end} but could not read its hash, so the cursor was not advanced. ` +
+          `Re-run when the RPC is healthy; nothing was lost.`,
+      )
+    }
+
     state.lastScannedBlock = end
-    state.lastScannedHash = await blockHash(end)
+    state.lastScannedHash = hash
     saveState(state)
 
     if (end < toBlock) log.info("progress", { at: end, remaining: toBlock - end })
