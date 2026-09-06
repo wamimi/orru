@@ -173,8 +173,26 @@ money."* Users are conditioned to fear signature prompts; defuse it inline.
 |---|---|
 | **Action** | Fetch the already-verified payment record |
 | **Call** | `GET /api/income/:address` |
-| **Chain** | none directly — the API reads Creditcoin state |
+| **Chain** | none directly — served from the worker's snapshot |
 | **Latency** | 1–3s |
+
+> **Where this data comes from — I had this wrong in an earlier draft.**
+> Creditcoin stores **commitments**, which are hashes. You cannot derive a band,
+> an amount, a period number or an evidence link from a hash. Everything on this
+> screen comes from the source chain, which the worker already collects.
+>
+> Run `npm run snapshot` in `worker/` and it writes `out/income-snapshot.json`:
+> every recipient, their payer, period counts, attestation status, the provable
+> window, the band, and evidence rows with both Sepolia and Creditcoin links.
+> Serve `/api/income/:address` from that file. **Do not rebuild the scanner** —
+> it would be a second source of truth for the one encoding that must never
+> drift.
+>
+> The snapshot deliberately carries the **band and never an amount or salt**.
+> Those are the circuit's private witness and stay in the worker.
+
+The snapshot's per-recipient shape is close to the payload below; map it rather
+than inventing fields.
 
 ```jsonc
 {
@@ -711,15 +729,21 @@ In the order I'd do them:
 
 ### 9e · Test data that exists right now
 
-Four workers are being paid every cycle on the live payroll, in three different
-bands, so the screens have real variety:
+Two payers, five verified income records, four different bands — so the screens
+have real variety and the two-payer story in §9f is demonstrable:
 
-| Worker | Band | Range | Key held by |
-|---|---|---|---|
-| `0xf6A48D18…0b66C` | 4 | $2,500 – $4,000 | **you** |
-| `0xBb605cf7…Dae75A` | 4 | $2,500 – $4,000 | Nelly |
-| `0xe058c205…cE3B34` | 5 | $4,000 – $6,000 | unassigned |
-| `0x722533cA…134f27` | 1 | $500 – $1,000 | unassigned |
+| Worker | Payer | Band | Range | Key held by |
+|---|---|---|---|---|
+| `0xf6A48D18…0b66C` | Demo Payroll | 4 | $2,500 – $4,000 | **you** |
+| `0xBb605cf7…Dae75A` | Demo Payroll | 4 | $2,500 – $4,000 | Nelly |
+| `0xBb605cf7…Dae75A` | **Semuni** | 6 | $6,000 – $10,000 | Nelly |
+| `0xe058c205…cE3B34` | Demo Payroll | 5 | $4,000 – $6,000 | unassigned |
+| `0x722533cA…134f27` | Demo Payroll | 1 | $500 – $1,000 | unassigned |
+
+Note the third row: **one wallet with two verified incomes from two payers**, in
+different bands. That is a real case to design for — the income screen has to
+pick a payer, and a credential is always scoped to one. Never merge periods
+across payers; period numbers are payer-local and the contracts reject it.
 
 **Build against `0xf6A48D18…` — that is your own wallet.** It has an attested,
 provable window (periods 2–4, band 4) on Creditcoin right now, which means you
@@ -773,6 +797,59 @@ wrong.
 
 If you find yourself writing "your income stays private," change it to something
 you can defend: *"Your exact pay never goes into your statement — only a range."*
+
+### The two payers, side by side
+
+There are now two payers on the live deployment, and the difference between them
+**is** the pitch. Use this comparison; it is the answer to the question a judge is
+most likely to ask.
+
+**Semuni** pays contractors by bank transfer and anchors only a commitment. Here
+is the entire on-chain record of three months of salary:
+
+```
+tx     0xfd96eaf394b69a08fb6a0a080af3de3a034be57cc6cb66deb2b4222c89df1cbf
+from   0x0531203274075Ff79A07000BBDa2B0272C647d01   (Semuni)
+to     0x16EaB9DA91D2AEea1F1138A95E42C37d1D47B7d2   (PayerAnchor)
+value  0 wei
+input  164 bytes
+
+3 logs, all PaymentAnchored(payer, commitment):
+  0x4324ad13f3fb1babcce363dfa125d40841ae21c665488213a7b4f34f1f6b255d
+  0x7928367c26fea7a964cb58e43e822aad97162c4be227072cd56ad23aaa61670f
+  0xe8bd1d0502da34112ea376503b75173b9b9fd2958534de181f7e5454ed518783
+```
+
+The salary is `7500000000` base units. Searched as hex and as decimal, it appears
+**nowhere** in that transaction or its receipt. The salt is random and held only
+by the payer and the recipient, so the commitment cannot be inverted either. And
+`0xBb605cf7…` still holds a verified band-6 credential — $6,000–$10,000, three
+consecutive periods.
+
+**Orru Demo Payroll** pays on-chain, so:
+
+```
+cast call <payroll> "amountOf(address)" 0xBb605cf7…   →  2500000000
+```
+
+One call. No proof, no brute force, no cleverness.
+
+| | Demo Payroll | Semuni |
+|---|---|---|
+| Payment rail | on-chain ERC-20 | off-chain bank transfer |
+| On-chain footprint | amount, salt, transfer, public `amountOf` | one hash per period |
+| Salt | deterministic, derivable | random, secret |
+| Can anyone read the salary? | **yes, one `eth_call`** | **no** |
+| Credential produced | band 4, 3 periods | band 6, 3 periods |
+| Verifies identically? | yes | yes |
+
+Same pipeline, same circuit, same registry, indistinguishable credentials.
+
+**How to say it:** the payroll is transparent *on purpose* — it is a payer we
+control so anyone can audit every step from payment to credential. Semuni is how
+it works in production: Orru proves income the payer never published. Do not
+present the payroll as a limitation being excused; present it as the auditable
+half of a deliberate pair.
 
 ---
 
@@ -1044,7 +1121,57 @@ The full error list is in §8d. Anything unrecognised from `issue` — including
 `SumcheckFailed` from the verifier — is a verification failure, not a bug in the
 wallet.
 
-### 10f · Getting a proof into the browser
+### 10f · Serving the income snapshot
+
+`worker/out/income-snapshot.json` is the source for S3 and S4. Shape:
+
+```jsonc
+{
+  "generatedAt": "2026-09-06T12:56:04.000Z",
+  "payers": { "0x0531…": { "name": "Semuni" } },
+  "recipients": [
+    {
+      "address": "0xBb605cf7…",
+      "verified": true,
+      "payerAddress": "0x0531…",
+      "payerName": "Semuni",
+      "periodsPaid": 3,
+      "periodsAttested": 3,
+      "provableWindow": { "from": 1, "to": 3 },
+      "incomeBand": { "id": 6, "label": "$6,000 - $10,000" },
+      "evidence": [
+        { "period": 1, "sourceChain": "Ethereum Sepolia", "sourceTx": "0x…",
+          "sourceBlock": 11646662, "verifiedTx": "0x…", "attested": true }
+      ]
+    }
+  ]
+}
+```
+
+```ts
+// src/app/api/income/[address]/route.ts
+import snapshot from '@/../worker/out/income-snapshot.json'
+
+export async function GET(_: Request, { params }: { params: { address: string } }) {
+  const rows = snapshot.recipients.filter(
+    r => r.address.toLowerCase() === params.address.toLowerCase(),
+  )
+  if (rows.length === 0) {
+    return Response.json({ verified: false, reason: 'no_payments' }, { status: 404 })
+  }
+  // One wallet can have income from several payers. A credential is scoped to
+  // one payer, so return them all and let the user choose.
+  return Response.json({ address: params.address, incomes: rows })
+}
+```
+
+Regenerate with `npm run snapshot` in `worker/` after any scan or attest — or use
+`npm run run`, which scans, attests and writes the snapshot in one pass.
+
+`verified: false` rows carry a `reason`: `no_payments`, `not_yet_verified`,
+`too_few_periods` or `not_consecutive`. All four are designed states in §2.
+
+### 10g · Getting a proof into the browser
 
 This is the piece I still owe you. To prove in-browser you need three artifacts
 from the circuit:
