@@ -2,6 +2,15 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from "
 import { resolve } from "node:path"
 import { config } from "./config.js"
 
+export interface Checkpoint {
+  block: number
+  hash: string
+}
+
+/// How far back a reorg can be resolved. Beyond this the worker rescans from the
+/// start block rather than pretending to know where the fork was.
+export const MAX_CHECKPOINTS = 64
+
 export type AnchorStatus = "pending" | "submitted" | "accepted" | "failed"
 
 export interface AnchoredCommitment {
@@ -52,6 +61,10 @@ export interface WorkerState {
   /// @dev Hash of `lastScannedBlock`, so a reorg deeper than the confirmation
   ///      window is detected instead of being scanned past.
   lastScannedHash?: string
+  /// @dev Recent (block, hash) pairs, ascending. A reorg is resolved by walking
+  ///      back through these to a block the chain still agrees with, rather than
+  ///      guessing a fixed rewind depth.
+  checkpoints?: Checkpoint[]
   anchors: Record<string, AnchorTx>
   payments: PaymentRecord[]
   /// @dev Cached `approvedPayer` results, so anchor spam cannot force a fresh
@@ -204,15 +217,29 @@ export interface CursorPlan {
   reason: string | null
 }
 
+/// Appends a checkpoint, keeping the most recent MAX_CHECKPOINTS in ascending
+/// order. Re-scanning a block replaces its entry rather than duplicating it.
+export function recordCheckpoint(
+  checkpoints: Checkpoint[] | undefined,
+  block: number,
+  hash: string,
+): Checkpoint[] {
+  const kept = (checkpoints ?? []).filter((c) => c.block < block)
+  kept.push({ block, hash })
+  return kept.slice(-MAX_CHECKPOINTS)
+}
+
 /// Where the next scan starts, and whether anything forced it backwards.
-/// `chainAgrees` is false when the stored hash no longer matches the chain at
-/// `lastScannedBlock`, which means a reorg went deeper than the confirmations.
+///
+/// `ancestor` is the highest block the chain still agrees with: equal to
+/// `lastScannedBlock` when nothing forked, lower after a reorg, and `null` when
+/// no journalled checkpoint survived — which means the fork is deeper than the
+/// journal and the only honest answer is a full rescan.
 export function planCursor(
   state: Pick<WorkerState, "lastScannedBlock" | "demoPayrolls">,
   configured: readonly string[],
   startBlock: number,
-  confirmations: number,
-  chainAgrees: boolean,
+  ancestor: number | null,
 ): CursorPlan {
   const floor = Math.max(startBlock - 1, 0)
 
@@ -225,16 +252,43 @@ export function planCursor(
     }
   }
 
-  if (!chainAgrees) {
-    const rewound = Math.max(state.lastScannedBlock - confirmations * 2, floor)
+  if (ancestor === null) {
+    return {
+      fromBlock: startBlock,
+      rewoundTo: floor,
+      reason: "no journalled block still matches the chain — rescanning from the start block",
+    }
+  }
+
+  if (ancestor < state.lastScannedBlock) {
+    const rewound = Math.max(ancestor, floor)
     return {
       fromBlock: rewound + 1,
       rewoundTo: rewound,
-      reason: "the chain no longer agrees with the recorded block hash — reorg",
+      reason: `reorg — the chain last agrees at block ${rewound}`,
     }
   }
 
   return { fromBlock: Math.max(state.lastScannedBlock + 1, startBlock), rewoundTo: null, reason: null }
+}
+
+/// Discards everything discovered above `block`. Records from orphaned blocks
+/// are not merely stale, they describe transactions that no longer exist, and a
+/// proof window built from them could never be attested.
+export function pruneAbove(state: WorkerState, block: number): { anchors: number; payments: number } {
+  let anchors = 0
+  for (const [txHash, anchor] of Object.entries(state.anchors)) {
+    if (anchor.blockNumber <= block) continue
+    delete state.anchors[txHash]
+    anchors += 1
+  }
+
+  const before = state.payments.length
+  state.payments = state.payments.filter((p) => p.blockNumber <= block)
+
+  state.checkpoints = (state.checkpoints ?? []).filter((c) => c.block <= block)
+
+  return { anchors, payments: before - state.payments.length }
 }
 
 /// Canonical key for an acceptance fact. Never key by commitment alone — the

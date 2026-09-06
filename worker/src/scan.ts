@@ -5,7 +5,14 @@ import { sourceClient } from "./chains.js"
 import { config } from "./config.js"
 import { discoveryBackend, findEvents, newFetcher } from "./discovery.js"
 import { log, short } from "./log.js"
-import { loadState, planCursor, saveState, type WorkerState } from "./state.js"
+import {
+  loadState,
+  planCursor,
+  pruneAbove,
+  recordCheckpoint,
+  saveState,
+  type WorkerState,
+} from "./state.js"
 
 interface AnchoredArgs {
   payer: `0x${string}`
@@ -40,17 +47,17 @@ export async function scan(): Promise<ScanResult> {
   const head = Number(await client.getBlockNumber())
   const toBlock = head - c.confirmations
 
-  const plan = planCursor(
-    state,
-    c.demoPayrolls,
-    c.startBlock,
-    c.confirmations,
-    await chainAgrees(state.lastScannedBlock, state.lastScannedHash),
-  )
+  const plan = planCursor(state, c.demoPayrolls, c.startBlock, await findAncestor(state))
+
   if (plan.rewoundTo !== null) {
     log.warn("rewinding the cursor", { to: plan.rewoundTo, reason: plan.reason ?? "" })
+    // Records above the ancestor describe transactions the chain no longer has.
+    const dropped = pruneAbove(state, plan.rewoundTo)
+    if (dropped.anchors > 0 || dropped.payments > 0) {
+      log.warn("discarded orphaned records", dropped)
+    }
     state.lastScannedBlock = plan.rewoundTo
-    state.lastScannedHash = undefined
+    state.lastScannedHash = state.checkpoints?.at(-1)?.hash
   }
   // Recorded once the rewind decision is made, so the next run compares against
   // the set actually scanned.
@@ -170,6 +177,7 @@ export async function scan(): Promise<ScanResult> {
 
     state.lastScannedBlock = end
     state.lastScannedHash = hash
+    state.checkpoints = recordCheckpoint(state.checkpoints, end, hash)
     saveState(state)
 
     if (end < toBlock) log.info("progress", { at: end, remaining: toBlock - end })
@@ -185,16 +193,37 @@ export async function scan(): Promise<ScanResult> {
   return { fromBlock, toBlock, newAnchorTxs, newPayments, mismatches }
 }
 
-/// Whether the chain still has the block the cursor was left on. A false here
-/// means a reorg went deeper than the confirmation window.
-async function chainAgrees(lastScannedBlock: number, recordedHash?: string): Promise<boolean> {
-  if (!recordedHash || lastScannedBlock <= 0) return true
+/// The highest journalled block the chain still agrees with.
+///
+/// Returns `lastScannedBlock` when nothing forked, a lower block when it did,
+/// and `null` when no checkpoint survives — a fork deeper than the journal,
+/// where guessing a rewind depth would silently lose history.
+async function findAncestor(state: WorkerState): Promise<number | null> {
+  const journal = state.checkpoints ?? []
+
+  // Nothing journalled: either a fresh state, or one written before checkpoints
+  // existed. Fall back to the single recorded hash.
+  if (journal.length === 0) {
+    if (!state.lastScannedHash || state.lastScannedBlock <= 0) return state.lastScannedBlock
+    return (await hashMatches(state.lastScannedBlock, state.lastScannedHash))
+      ? state.lastScannedBlock
+      : null
+  }
+
+  for (let i = journal.length - 1; i >= 0; i--) {
+    const { block, hash } = journal[i]!
+    if (await hashMatches(block, hash)) return block
+  }
+
+  return null
+}
+
+async function hashMatches(blockNumber: number, expected: string): Promise<boolean> {
   try {
-    const block = await sourceClient().getBlock({ blockNumber: BigInt(lastScannedBlock) })
-    return block.hash?.toLowerCase() === recordedHash.toLowerCase()
+    const block = await sourceClient().getBlock({ blockNumber: BigInt(blockNumber) })
+    return block.hash?.toLowerCase() === expected.toLowerCase()
   } catch {
-    // The block is gone or unreachable. Treating that as agreement would scan
-    // past a reorg, so assume it does not.
+    // Gone or unreachable. Treating that as agreement would scan past a reorg.
     return false
   }
 }

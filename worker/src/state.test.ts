@@ -11,26 +11,26 @@ function state(lastScannedBlock: number, demoPayrolls: string[] = PAYROLLS) {
 }
 
 test("a fresh cursor starts at the start block, not one past it", () => {
-  const plan = planCursor(state(START - 1), PAYROLLS, START, CONFIRMATIONS, true)
+  const plan = planCursor(state(START - 1), PAYROLLS, START, START - 1)
   assert.equal(plan.fromBlock, START)
   assert.equal(plan.rewoundTo, null)
 })
 
 test("a settled cursor advances by one", () => {
-  const plan = planCursor(state(500), PAYROLLS, START, CONFIRMATIONS, true)
+  const plan = planCursor(state(500), PAYROLLS, START, 500)
   assert.equal(plan.fromBlock, 501)
   assert.equal(plan.rewoundTo, null)
 })
 
 test("adding a payroll rewinds to the start block", () => {
   const configured = [...PAYROLLS, "0xBBbBbB00000000000000000000000000000000bb"]
-  const plan = planCursor(state(500), configured, START, CONFIRMATIONS, true)
+  const plan = planCursor(state(500), configured, START, 500)
   assert.equal(plan.fromBlock, START, "the new payroll's history predates the cursor")
   assert.match(plan.reason ?? "", /payroll added/)
 })
 
 test("removing a payroll does not rewind", () => {
-  const plan = planCursor(state(500, [...PAYROLLS, "0xCc"]), PAYROLLS, START, CONFIRMATIONS, true)
+  const plan = planCursor(state(500, [...PAYROLLS, "0xCc"]), PAYROLLS, START, 500)
   assert.equal(plan.fromBlock, 501)
   assert.equal(plan.rewoundTo, null)
 })
@@ -38,25 +38,32 @@ test("removing a payroll does not rewind", () => {
 test("payroll comparison ignores address casing", () => {
   const shouted = PAYROLLS.map((x) => x.toUpperCase())
   assert.deepEqual(addedPayrolls(PAYROLLS, shouted), [])
-  const plan = planCursor(state(500), shouted, START, CONFIRMATIONS, true)
+  const plan = planCursor(state(500), shouted, START, 500)
   assert.equal(plan.fromBlock, 501, "the same payroll in another case is not a new one")
 })
 
-test("a reorg rewinds twice the confirmation window", () => {
-  const plan = planCursor(state(500), PAYROLLS, START, CONFIRMATIONS, false)
-  assert.equal(plan.rewoundTo, 490)
-  assert.equal(plan.fromBlock, 491)
+test("a reorg rewinds to the ancestor the chain still agrees with", () => {
+  const plan = planCursor(state(500), PAYROLLS, START, 437)
+  assert.equal(plan.rewoundTo, 437, "not a guessed depth — the actual common ancestor")
+  assert.equal(plan.fromBlock, 438)
   assert.match(plan.reason ?? "", /reorg/)
 })
 
+test("no surviving checkpoint forces a full rescan rather than a guess", () => {
+  const plan = planCursor(state(500), PAYROLLS, START, null)
+  assert.equal(plan.fromBlock, START)
+  assert.equal(plan.rewoundTo, START - 1)
+  assert.match(plan.reason ?? "", /rescanning from the start block/)
+})
+
 test("a reorg never rewinds below the start block", () => {
-  const plan = planCursor(state(START), PAYROLLS, START, CONFIRMATIONS, false)
+  const plan = planCursor(state(START), PAYROLLS, START, START - 50)
   assert.equal(plan.rewoundTo, START - 1)
   assert.equal(plan.fromBlock, START)
 })
 
 test("the floor is clamped at zero when the start block is zero", () => {
-  const plan = planCursor(state(0, PAYROLLS), PAYROLLS, 0, CONFIRMATIONS, false)
+  const plan = planCursor(state(0, PAYROLLS), PAYROLLS, 0, null)
   assert.ok(plan.fromBlock >= 0)
   assert.ok((plan.rewoundTo ?? 0) >= 0)
 })
@@ -228,4 +235,50 @@ test("the allowlist discards spam before any RPC call", () => {
 test("an empty allowlist keeps everything, so the filter is opt-in", () => {
   const entries: [string, AnchorTx][] = [["0xa", anchor(1, APPROVED)], ["0xb", anchor(2, UNAPPROVED)]]
   assert.equal(withinAllowlist(entries, new Set()).length, 2)
+})
+
+
+// ------------------------------------------------- checkpoints and pruning
+
+import { MAX_CHECKPOINTS, pruneAbove, recordCheckpoint } from "./state.js"
+
+test("checkpoints stay ascending, deduplicated and capped", () => {
+  let cps = recordCheckpoint(undefined, 100, "0xaaa")
+  cps = recordCheckpoint(cps, 200, "0xbbb")
+  assert.deepEqual(cps.map((c) => c.block), [100, 200])
+
+  // Re-scanning a block replaces its entry rather than appending a stale twin.
+  cps = recordCheckpoint(cps, 150, "0xccc")
+  assert.deepEqual(cps.map((c) => c.block), [100, 150])
+
+  for (let b = 200; b < 200 + MAX_CHECKPOINTS * 2; b++) cps = recordCheckpoint(cps, b, `0x${b}`)
+  assert.equal(cps.length, MAX_CHECKPOINTS)
+  assert.ok(cps.every((c, i) => i === 0 || c.block > cps[i - 1]!.block))
+})
+
+test("pruning removes orphaned anchors, payments and checkpoints", () => {
+  const world = worldWith({
+    "0xkeep": anchor(100, APPROVED),
+    "0xdrop": anchor(500, APPROVED),
+  })
+  world.payments = [
+    { payer: APPROVED, recipient: "0xr", amount: "1", period: "1", salt: "0x00",
+      commitment: "0xc1", txHash: "0x00", blockNumber: 100 },
+    { payer: APPROVED, recipient: "0xr", amount: "1", period: "2", salt: "0x00",
+      commitment: "0xc2", txHash: "0x00", blockNumber: 500 },
+  ] as never
+  world.checkpoints = [{ block: 100, hash: "0xa" }, { block: 500, hash: "0xb" }]
+
+  const dropped = pruneAbove(world, 200)
+
+  assert.deepEqual(dropped, { anchors: 1, payments: 1 })
+  assert.deepEqual(Object.keys(world.anchors), ["0xkeep"])
+  assert.equal(world.payments.length, 1)
+  assert.deepEqual(world.checkpoints?.map((c) => c.block), [100])
+})
+
+test("pruning above the tip changes nothing", () => {
+  const world = worldWith({ "0xa": anchor(100, APPROVED), "0xb": anchor(150, APPROVED) })
+  assert.deepEqual(pruneAbove(world, 1000), { anchors: 0, payments: 0 })
+  assert.equal(Object.keys(world.anchors).length, 2)
 })
