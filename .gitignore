@@ -89,6 +89,10 @@ fizz_data/
 # public before the deadline, and ideally not after without a re-review.
 contracts/audit-report*.md
 contracts/.audit-*/
+
+# Audit tooling scratch directories, wherever they land. Not root-anchored on
+# purpose — these appear at whatever depth the tool is run from.
+.audit-*/
 *-pashov-ai-audit-report-*.md
 
 # Internal strategy, specs and handoffs — competitive analysis, cut order,
