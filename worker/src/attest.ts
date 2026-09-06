@@ -7,12 +7,15 @@ import { creditcoinClient } from "./chains.js"
 import { config, positiveInt, requireDeployed } from "./config.js"
 import { log, short } from "./log.js"
 import {
+  approvalIsFresh,
   backoffMs,
   loadState,
   payersOf,
+  pairKey,
   pendingAnchors,
   relayable,
   saveState,
+  withinAllowlist,
   type AnchorTx,
 } from "./state.js"
 import { loadSigner } from "./signer.js"
@@ -22,6 +25,10 @@ import { loadSigner } from "./signer.js"
 const LOOKAHEAD = positiveInt("WORKER_ATTEST_LOOKAHEAD", 10)
 const POLL_MS = positiveInt("WORKER_POLL_MS", 5_000)
 const WAIT_MS = positiveInt("WORKER_WAIT_MS", 1_200_000)
+
+/// New payers checked on-chain per pass. Cached results persist, so a genuine
+/// backlog clears over a few passes while spam cannot amplify.
+const MAX_APPROVAL_LOOKUPS = positiveInt("WORKER_MAX_APPROVAL_LOOKUPS", 25)
 
 export interface AttestOptions {
   submit: boolean
@@ -43,24 +50,53 @@ export async function attest(options: AttestOptions): Promise<void> {
   const cc = creditcoinClient()
   await assertRegistryMatchesConfig(cc, registryAddress)
 
-  // Approvals are read once per distinct payer and the filter runs BEFORE the
-  // limit. Anyone can anchor a commitment, so unapproved anchors would
-  // otherwise fill every pass, oldest first, and starve the real ones.
+  // Anyone can anchor a commitment, so the filter runs BEFORE the limit or
+  // unapproved anchors fill every pass, oldest first. Three layers, cheapest
+  // first: a local allowlist costs nothing, the cache costs nothing, and only
+  // genuinely unknown payers reach the chain — bounded, so ten thousand spam
+  // addresses cannot force ten thousand sequential reads every pass.
+  const allowlist = new Set(c.payerAllowlist.map((a) => a.toLowerCase()))
+  const shortlist = withinAllowlist(candidates, allowlist)
+  if (shortlist.length < candidates.length) {
+    log.info("outside the payer allowlist", { ignored: candidates.length - shortlist.length })
+  }
+
+  state.payerApprovals ??= {}
   const approved = new Set<string>()
-  for (const payer of payersOf(candidates.map(([, a]) => a))) {
+  let lookups = 0
+
+  for (const payer of payersOf(shortlist.map(([, a]) => a))) {
+    const key = payer.toLowerCase()
+    const cached = state.payerApprovals[key]
+
+    if (approvalIsFresh(cached)) {
+      if (cached!.approved) approved.add(key)
+      continue
+    }
+
+    if (lookups >= MAX_APPROVAL_LOOKUPS) {
+      log.warn("approval lookup budget reached; remaining payers retry next pass", {
+        budget: MAX_APPROVAL_LOOKUPS,
+      })
+      break
+    }
+
+    lookups += 1
     const ok = await cc.readContract({
       address: registryAddress,
       abi: attestationRegistryAbi,
       functionName: "approvedPayer",
       args: [payer as `0x${string}`],
     })
-    if (ok) approved.add(payer.toLowerCase())
+    state.payerApprovals[key] = { approved: Boolean(ok), checkedAt: new Date().toISOString() }
+    if (ok) approved.add(key)
   }
+  saveState(state)
 
-  const eligible = relayable(candidates, approved)
-  if (eligible.length < candidates.length) {
+  const eligible = relayable(shortlist, approved)
+  if (eligible.length < shortlist.length) {
     log.warn("skipping anchors with no approved payer", {
-      skipped: candidates.length - eligible.length,
+      skipped: shortlist.length - eligible.length,
     })
   }
 
@@ -239,6 +275,7 @@ async function allExpectedAccepted(deps: Deps, anchor: AnchorTx): Promise<boolea
   const expected = anchor.commitments.filter((c) => deps.approved.has(c.payer.toLowerCase()))
   if (expected.length === 0) return false
 
+  const confirmed: string[] = []
   for (const { payer, commitment } of expected) {
     const accepted = await deps.cc.readContract({
       address: deps.registryAddress,
@@ -247,7 +284,12 @@ async function allExpectedAccepted(deps: Deps, anchor: AnchorTx): Promise<boolea
       args: [commitment, payer],
     })
     if (!accepted) return false
+    confirmed.push(pairKey(payer, commitment))
   }
+
+  // Recorded so downstream consumers report what the registry actually accepted
+  // rather than everything the transaction happened to contain.
+  anchor.acceptedPairs = confirmed
   return true
 }
 

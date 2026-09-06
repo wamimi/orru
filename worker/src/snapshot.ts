@@ -6,7 +6,7 @@ import { config } from "./config.js"
 import { log } from "./log.js"
 import { mergeByCommitment, pickWindow, PERIODS } from "./prove.js"
 import { allSlipBooks } from "./slips.js"
-import { loadState, type AnchorTx, type PaymentRecord } from "./state.js"
+import { loadState, pairKey, type AnchorTx, type PaymentRecord } from "./state.js"
 
 export interface EvidenceRow {
   period: number
@@ -64,14 +64,23 @@ export function buildSnapshot(): Snapshot {
   const state = loadState()
   const names = payerNames()
 
-  const attestedCommitments = new Set<string>()
+  // Keyed by (payer, commitment), never by commitment alone. Anchoring is
+  // permissionless, so anyone can anchor a copy of a public commitment; keying
+  // by commitment would let their unaccepted copy display as verified income.
+  const attestedPairs = new Set<string>()
   const verifiedTxOf = new Map<string, string>()
 
   for (const anchor of Object.values(state.anchors) as AnchorTx[]) {
     if (anchor.status !== "accepted") continue
-    for (const { commitment } of anchor.commitments) {
-      attestedCommitments.add(commitment.toLowerCase())
-      if (anchor.creditcoinTx) verifiedTxOf.set(commitment.toLowerCase(), anchor.creditcoinTx)
+
+    // Written by attest from the on-chain readback. Older state predates it, so
+    // fall back to this anchor's own pairs — still payer-scoped.
+    const pairs =
+      anchor.acceptedPairs ?? anchor.commitments.map((c) => pairKey(c.payer, c.commitment))
+
+    for (const key of pairs) {
+      attestedPairs.add(key)
+      if (anchor.creditcoinTx) verifiedTxOf.set(key, anchor.creditcoinTx)
     }
   }
 
@@ -112,7 +121,7 @@ export function buildSnapshot(): Snapshot {
     const payer = getAddress(payerKey!)
 
     const sorted = [...records].sort((a, b) => (BigInt(a.period) < BigInt(b.period) ? -1 : 1))
-    const attested = sorted.filter((p) => attestedCommitments.has(p.commitment.toLowerCase()))
+    const attested = sorted.filter((p) => attestedPairs.has(pairKey(p.payer, p.commitment)))
     const window = attested.length >= PERIODS ? pickWindow(attested, PERIODS) : null
 
     // The band is a property of the window being proven, not of the whole
@@ -147,8 +156,8 @@ export function buildSnapshot(): Snapshot {
         sourceChain: "Ethereum Sepolia" as const,
         sourceTx: p.txHash,
         sourceBlock: p.blockNumber,
-        verifiedTx: verifiedTxOf.get(p.commitment.toLowerCase()) ?? null,
-        attested: attestedCommitments.has(p.commitment.toLowerCase()),
+        verifiedTx: verifiedTxOf.get(pairKey(p.payer, p.commitment)) ?? null,
+        attested: attestedPairs.has(pairKey(p.payer, p.commitment)),
       })),
     })
   }

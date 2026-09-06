@@ -17,6 +17,11 @@ export interface AnchorTx {
   error?: string
   attempts: number
   lastAttemptAt?: string
+  /// @dev Lowercased `payer|commitment` pairs the registry confirmed on readback.
+  ///      Acceptance is per pair, never per transaction: one receipt can carry
+  ///      an approved payer's commitment alongside an unapproved payer's, and
+  ///      only the former is accepted.
+  acceptedPairs?: string[]
   /// @dev ISO timestamp before which this anchor is not retried. Without it a
   ///      handful of permanently failing anchors, sorted oldest first, occupy
   ///      every pass and nothing behind them is ever relayed.
@@ -38,12 +43,20 @@ export interface WorkerState {
   version: 1
   payerAnchor: string
   demoPayrolls: string[]
+  /// @dev The Creditcoin registry the acceptance statuses below were recorded
+  ///      against. Attestation is a fact about one registry, not about the
+  ///      world; pointing at a fresh one makes every cached status meaningless.
+  creditcoinChainId?: number
+  attestationRegistry?: string | null
   lastScannedBlock: number
   /// @dev Hash of `lastScannedBlock`, so a reorg deeper than the confirmation
   ///      window is detected instead of being scanned past.
   lastScannedHash?: string
   anchors: Record<string, AnchorTx>
   payments: PaymentRecord[]
+  /// @dev Cached `approvedPayer` results, so anchor spam cannot force a fresh
+  ///      on-chain read per payer on every pass.
+  payerApprovals?: Record<string, { approved: boolean; checkedAt: string }>
 }
 
 const VERSION = 1 as const
@@ -61,6 +74,8 @@ function empty(): WorkerState {
     // One before the start block: the cursor names the last block SCANNED, and
     // initialising it to startBlock would skip startBlock itself.
     lastScannedBlock: Math.max(c.startBlock - 1, 0),
+    creditcoinChainId: c.creditcoinChainId,
+    attestationRegistry: c.attestationRegistry,
     anchors: {},
     payments: [],
   }
@@ -84,6 +99,32 @@ export function loadState(): WorkerState {
         `Delete ${path} to rescan, or point the worker back at the original anchor.`,
     )
   }
+
+  // Source scan data stays valid across a destination change; acceptance does
+  // not. Rather than refuse to load, forget what the old registry accepted.
+  const destination = c.attestationRegistry?.toLowerCase() ?? null
+  const recorded = parsed.attestationRegistry?.toLowerCase() ?? null
+  const chainChanged =
+    parsed.creditcoinChainId !== undefined && parsed.creditcoinChainId !== c.creditcoinChainId
+
+  if (destination !== null && recorded !== null && (recorded !== destination || chainChanged)) {
+    let reset = 0
+    for (const anchor of Object.values(parsed.anchors)) {
+      if (anchor.status === "pending") continue
+      anchor.status = "pending"
+      anchor.acceptedPairs = undefined
+      anchor.creditcoinTx = undefined
+      anchor.nextAttemptAt = undefined
+      reset += 1
+    }
+    console.error(
+      `   !  destination registry changed (${recorded} -> ${destination}); ` +
+        `${reset} anchor(s) reset to pending. Source scan data kept.`,
+    )
+  }
+
+  parsed.creditcoinChainId = c.creditcoinChainId
+  parsed.attestationRegistry = c.attestationRegistry
 
   return parsed
 }
@@ -194,4 +235,38 @@ export function planCursor(
   }
 
   return { fromBlock: Math.max(state.lastScannedBlock + 1, startBlock), rewoundTo: null, reason: null }
+}
+
+/// Canonical key for an acceptance fact. Never key by commitment alone — the
+/// same commitment can be anchored by more than one payer, and acceptance is
+/// scoped to the pair.
+export function pairKey(payer: string, commitment: string): string {
+  return `${payer.toLowerCase()}|${commitment.toLowerCase()}`
+}
+
+/// Approval rarely changes, and the two directions carry different risk. A stale
+/// `true` costs a reverted relay; a stale `false` delays a legitimate payer, so
+/// it expires sooner.
+export const APPROVAL_TTL_MS = { approved: 86_400_000, denied: 3_600_000 } as const
+
+export function approvalIsFresh(
+  entry: { approved: boolean; checkedAt: string } | undefined,
+  now: number = Date.now(),
+): boolean {
+  if (!entry) return false
+  const age = now - Date.parse(entry.checkedAt)
+  if (Number.isNaN(age) || age < 0) return false
+  return age < (entry.approved ? APPROVAL_TTL_MS.approved : APPROVAL_TTL_MS.denied)
+}
+
+/// Anchors whose payers are all outside the allowlist. Applied before any RPC,
+/// so an attacker anchoring from ten thousand addresses costs nothing to ignore.
+export function withinAllowlist(
+  anchors: [string, AnchorTx][],
+  allowlist: ReadonlySet<string>,
+): [string, AnchorTx][] {
+  if (allowlist.size === 0) return anchors
+  return anchors.filter((entry) =>
+    entry[1].commitments.some((c) => allowlist.has(c.payer.toLowerCase())),
+  )
 }

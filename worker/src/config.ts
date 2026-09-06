@@ -106,6 +106,7 @@ export interface Config {
   creditcoinChainId: number
   payerAnchor: `0x${string}`
   demoPayrolls: `0x${string}`[]
+  payerAllowlist: `0x${string}`[]
   attestationRegistry: `0x${string}` | null
   credentialRegistry: `0x${string}` | null
   startBlock: number
@@ -131,6 +132,9 @@ export function config(): Config {
     creditcoinChainId: positiveInt("CREDITCOIN_CHAIN_ID", 102031),
     payerAnchor: address("PAYER_ANCHOR_ADDRESS", required("PAYER_ANCHOR_ADDRESS")),
     demoPayrolls: addressList("DEMO_PAYROLL_ADDRESS"),
+    // Optional. When set, only these payers are ever relayed, and
+    // everything else is discarded before any RPC call is made.
+    payerAllowlist: addressList("CREDITCOIN_PAYERS"),
     attestationRegistry: optionalAddress("ATTESTATION_REGISTRY_ADDRESS"),
     credentialRegistry: optionalAddress("CREDENTIAL_REGISTRY_ADDRESS"),
     startBlock: integer("WORKER_START_BLOCK", 0),
