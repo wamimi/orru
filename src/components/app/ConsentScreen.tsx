@@ -17,6 +17,8 @@ export function ConsentScreen() {
   const requestParam = search.get("request");
   const { session } = useFlowSession();
   const [shared, setShared] = useState(outcome === "success");
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
 
   const request =
     requestParam === expiredRequest.id || outcome === "error"
@@ -30,7 +32,7 @@ export function ConsentScreen() {
       <ScreenFrame kicker="05 · Share" title="There is nothing to share yet.">
         <Callout
           tone="empty"
-          title="No credential on this address"
+          title="No statement on this address"
           body="Confirm your payments first. Sharing is a separate step, and you choose when it happens."
           actionLabel="Start from the beginning"
           actionHref="/connect"
@@ -66,7 +68,7 @@ export function ConsentScreen() {
       <ScreenFrame
         kicker="05 · Share"
         title="Shared."
-        lede="They can look this up without an account. You can stop sharing from your profile; the credential itself stays yours."
+        lede="They can look this up without an account. You can stop sharing from your profile; the statement itself stays yours."
       >
         <div className="border-t-2 border-brand pt-6 md:pt-8">
           <p className="meta flex items-center gap-2 text-brand">
@@ -104,12 +106,52 @@ export function ConsentScreen() {
       />
 
       <p className="mt-10 max-w-xl text-sm leading-relaxed text-ink-faint">
-        You can stop sharing later. Stopping does not delete the credential.
-        Exact amounts are not in these fields.
+        You can stop sharing later. Stopping does not delete the statement.
+        Exact pay never goes into your statement — only a range.
       </p>
 
+      {shareError ? (
+        <div className="mt-8">
+          <Callout tone="error" title="Nothing was shared" body={shareError} />
+        </div>
+      ) : null}
+
       <div className="mt-10 flex flex-wrap gap-3">
-        <Button onClick={() => setShared(true)}>Share these fields</Button>
+        <Button
+          disabled={sharing}
+          onClick={() => {
+            if (outcome === "success") {
+              setShared(true);
+              return;
+            }
+            setSharing(true);
+            setShareError(null);
+            fetch(`/api/share/${request.id}/consent`, {
+              method: "POST",
+              credentials: "include",
+              headers: session.sessionToken
+                ? { Authorization: `Bearer ${session.sessionToken}` }
+                : undefined,
+            })
+              .then(async (response) => {
+                if (!response.ok) {
+                  const body = (await response.json()) as { error?: string };
+                  throw new Error(body.error ?? "Nothing was shared.");
+                }
+                setShared(true);
+              })
+              .catch((error: unknown) => {
+                setShareError(
+                  error instanceof Error
+                    ? error.message
+                    : "Nothing was shared.",
+                );
+              })
+              .finally(() => setSharing(false));
+          }}
+        >
+          {sharing ? "Sharing…" : "Share these fields"}
+        </Button>
         <ButtonLink href="/credential" variant="quiet">
           Back
         </ButtonLink>

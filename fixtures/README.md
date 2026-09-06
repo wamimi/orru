@@ -1,0 +1,95 @@
+# Fixtures
+
+Real data from the live deployment, so every screen can be built and tested
+without running the worker. Regenerated 6 September; all five proofs verify
+against the deployed verifier on Creditcoin.
+
+## Start here
+
+**`proof-f6A48D18-payroll-band4.json`** — this is your wallet.
+
+It is the only one you can complete the full issue flow with, because
+`CredentialRegistry.issue` needs an EIP-712 signature from the subject and you
+hold that key. Read `proof` and `publicInputs` from it, build the typed data
+(§8c of FRONTEND-INTEGRATION.md), sign, and post to `/api/credential/issue`.
+
+The other four render fine on the income and verification screens and give you
+four different bands to design against, but nobody holds their keys, so they can
+never sign an issuance. Do not wire a signing flow to them.
+
+## When they stop working — read this before debugging
+
+These proofs are built over the **newest attested window** at the moment they were
+generated. Today that is periods 18–20 for the payroll workers. The payroll keeps
+paying and the relayer keeps attesting, so that window moves.
+
+When it moves, the proof still verifies cryptographically — but `issue()` rejects
+it:
+
+```
+CommitmentNotAttestedToPayer(bytes32, address)
+```
+
+**That is staleness, not a bug in your code.** The registry only accepts
+commitments it has actually seen attested, and these describe an older window.
+If you have just written the EIP-712 signing code and hit this, the signing code
+is probably fine.
+
+**Message Nelly and she regenerates in one command.** She has to — the worker's
+scan state, and Semuni's salts, exist only on her machine. Don't install the Noir
+toolchain to work around it.
+
+`manifest.json` records `generatedAt` and the exact window each proof covers, so
+you can check freshness without opening every file.
+
+## What is here
+
+| File | Subject | Payer | Band |
+|---|---|---|---|
+| `proof-f6A48D18-payroll-band4.json` | **yours** | Demo Payroll | 4 · $2,500–$4,000 |
+| `proof-Bb605cf7-payroll-band4.json` | Nelly's | Demo Payroll | 4 · $2,500–$4,000 |
+| `proof-Bb605cf7-semuni-band6.json` | Nelly's | **Semuni** | 6 · $6,000–$10,000 |
+| `proof-e058c205-payroll-band5.json` | demo only | Demo Payroll | 5 · $4,000–$6,000 |
+| `proof-722533cA-payroll-band1.json` | demo only | Demo Payroll | 1 · $500–$1,000 |
+| `income-snapshot.json` | — | both | all 8 records |
+
+`income-snapshot.json` is what `GET /api/income/:address` serves. It carries the
+band, period counts, the provable window and evidence rows with links to both
+chains — and deliberately no amounts, salts or commitments.
+
+## The two-payer case
+
+`0xBb605cf7…` appears twice, with income from two different payers in two
+different bands. That is a real case to design for: the income screen has to let
+the user pick a payer, and a credential is always scoped to one. Never merge
+periods across payers — period numbers are payer-local and the contracts reject
+it.
+
+## Shapes
+
+A proof bundle is exactly the `ProveResult` from `src/lib/prove`:
+
+```jsonc
+{
+  "subject":       "0x…",     // publicInputs[0], the credential's subject
+  "evidencePayer": "0x…",     // every commitment is attested to this payer
+  "band": 4, "bandLabel": "$2,500 - $4,000",
+  "periods":      ["18","19","20"],
+  "commitments":  ["0x…", "0x…", "0x…"],
+  "proof":        "0x…",      // 9,024 bytes
+  "publicInputs": ["0x…"]     // 8 words: subject, band, then 2 limbs per commitment
+}
+```
+
+## Regenerating
+
+These go stale when the attested window moves. To refresh:
+
+```bash
+cd worker && npm run scan && npm run attest -- --submit --limit 25
+npm run prove -- --recipient 0x… --payer 0x…
+npm run snapshot
+```
+
+Ask Nelly if a proof stops verifying — it means the window it was built over is
+no longer the newest attested one, not that anything is broken.

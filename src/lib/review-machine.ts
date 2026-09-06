@@ -8,7 +8,8 @@ export type ReviewScenario =
   | "unrecognised"
   | "failed"
   | "gap"
-  | "short";
+  | "short"
+  | "pending";
 
 export type StageId = "find" | "confirm" | "pattern";
 
@@ -30,15 +31,15 @@ export type ReviewSnapshot = {
 
 const STAGE_COPY: Record<StageId, { title: string; body: string }> = {
   find: {
-    title: "Finding payments",
-    body: "Looking up incoming payments to this address.",
+    title: "Looking at your payment history",
+    body: "Reading incoming payments to this payout account.",
   },
   confirm: {
-    title: "Confirming each payment",
-    body: "Checking each one against the chain it settled on, and whether the sender is recognised.",
+    title: "Confirming who paid you",
+    body: "Checking whether each sender is a verified employer.",
   },
   pattern: {
-    title: "Checking the income pattern",
+    title: "Checking your income",
     body: "Counting consecutive periods and how recent the last payment was.",
   },
 };
@@ -99,9 +100,30 @@ export function reviewAt(
       canContinue: false,
       recovery: {
         title: "No qualifying payments found",
-        body: "Nothing incoming to this address met the bar: recognised sender, recent enough, and on a network we check.",
+        body: "Nothing incoming to this payout account met the bar: recognised sender, recent enough, and on a network we check.",
         actionLabel: "Use a different address",
         actionHref: "/connect",
+      },
+    };
+  }
+
+  if (scenario === "pending") {
+    if (elapsedMs < FIND_DONE) {
+      return {
+        stages: stages("running", "waiting", "waiting"),
+        payments: [],
+        canContinue: false,
+      };
+    }
+    return {
+      stages: stages("done", "running", "waiting"),
+      payments: clonePayments(source, "found"),
+      canContinue: false,
+      recovery: {
+        title: "Still confirming your most recent payments",
+        body: "We're still confirming your most recent payments. This usually clears on its own in a few minutes.",
+        actionLabel: "Check again",
+        actionHref: "/review",
       },
     };
   }
@@ -184,7 +206,7 @@ export function reviewAt(
       payments: confirmedPayments,
       canContinue: false,
       recovery: {
-        title: "We could not recognise who paid you",
+        title: "We couldn't recognise who paid you",
         body: "Orru only counts payments from employers, platforms and grant programmes.",
         actionLabel: "Use a different address",
         actionHref: "/connect",
@@ -198,8 +220,8 @@ export function reviewAt(
       payments: confirmedPayments,
       canContinue: false,
       recovery: {
-        title: "There is a gap in the payment record",
-        body: "Consecutive periods are needed before a credential can be issued.",
+        title: "Your payments look irregular",
+        body: "Orru needs three pay cycles in a row before a statement can be issued.",
         actionLabel: "Back to connect",
         actionHref: "/connect",
       },
@@ -254,6 +276,7 @@ export function scenarioFromState(
   if (state === "error" && error === "failed") return "failed";
   if (state === "error" && error === "gap") return "gap";
   if (state === "error" && error === "short") return "short";
+  if (state === "error" && error === "pending") return "pending";
   if (state === "error") return "unrecognised";
   return "happy";
 }

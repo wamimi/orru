@@ -10,7 +10,7 @@ import { StageAside, StageList } from "@/components/app/StageList";
 import { useFlowSession } from "@/components/app/useFlowSession";
 import { ButtonLink } from "@/components/ui/Button";
 import { parseOutcome } from "@/lib/app";
-import type { IncomeLookup } from "@/lib/income-types";
+import type { IncomeLookup, IncomeResponse } from "@/lib/income-types";
 import {
   paymentsFromIncome,
   scenarioFromIncome,
@@ -21,6 +21,20 @@ import {
   scenarioFromState,
   type ReviewScenario,
 } from "@/lib/review-machine";
+
+function pickIncome(incomes: IncomeLookup[], selectedPayer: string | null): IncomeLookup | null {
+  if (incomes.length === 0) return null;
+  if (selectedPayer) {
+    const match = incomes.find(
+      (row) => row.payerAddress.toLowerCase() === selectedPayer.toLowerCase(),
+    );
+    if (match) return match;
+  }
+  return (
+    incomes.find((row) => row.verified && row.provableWindow) ??
+    incomes[0]
+  );
+}
 
 export function ReviewScreen() {
   const search = useSearchParams();
@@ -40,6 +54,7 @@ export function ReviewScreen() {
   );
   const [lookupError, setLookupError] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [incomes, setIncomes] = useState<IncomeLookup[]>(session.incomes);
 
   useEffect(() => {
     if (qa || !ready) return;
@@ -56,13 +71,24 @@ export function ReviewScreen() {
     })
       .then(async (response) => {
         if (!response.ok) throw new Error("lookup");
-        return (await response.json()) as IncomeLookup;
+        return (await response.json()) as IncomeResponse;
       })
-      .then((income) => {
+      .then((payload) => {
         if (cancelled) return;
-        update({ income });
-        setLivePayments(paymentsFromIncome(income));
-        setLiveScenario(scenarioFromIncome(income));
+        const rows = payload.incomes ?? [];
+        const selected = pickIncome(rows, session.income?.payerAddress ?? null);
+        setIncomes(rows);
+        update({
+          incomes: rows,
+          income: selected,
+        });
+        if (!selected) {
+          setLivePayments([]);
+          setLiveScenario("empty");
+          return;
+        }
+        setLivePayments(paymentsFromIncome(selected));
+        setLiveScenario(scenarioFromIncome(selected));
       })
       .catch(() => {
         if (cancelled) return;
@@ -73,7 +99,7 @@ export function ReviewScreen() {
     return () => {
       cancelled = true;
     };
-  }, [qa, ready, session.address, session.sessionToken, session.signed, update]);
+  }, [qa, ready, session.address, session.sessionToken, session.signed, session.income?.payerAddress, update]);
 
   const scenario = qa ? qaScenario : (liveScenario ?? "happy");
   const source = qa ? undefined : livePayments;
@@ -107,21 +133,30 @@ export function ReviewScreen() {
   const confirmed = display.payments.filter(
     (payment) => payment.evidence === "attested" || payment.evidence === "verified",
   ).length;
+  const selected = session.income;
+  const canContinue = display.canContinue && (qa || Boolean(selected?.provableWindow));
+
+  function selectPayer(row: IncomeLookup) {
+    update({ income: row, incomes });
+    setLivePayments(paymentsFromIncome(row));
+    setLiveScenario(scenarioFromIncome(row));
+    setElapsed(20_000);
+  }
 
   return (
     <ScreenFrame
       kicker="02 · Review"
-      title="Each payment is found, then confirmed."
-      lede="Looking something up is not the same as confirming it. A payment only counts once it has been confirmed and the sender is recognised."
+      title="Checking your income."
+      lede="This is a short reveal of a record that is already confirmed. A payment only counts once the sender is a verified employer."
       aside={
         <StageAside>
-          <p className="eyebrow text-ink-faint">On this address</p>
+          <p className="eyebrow text-ink-faint">On this payout account</p>
           <p className="display-md mt-4 text-ink">
             {display.payments.length === 0
               ? waitingForLive
                 ? "Checking"
                 : "No payments yet"
-              : `${confirmed} confirmed`}
+              : `${selected?.periodsAttested ?? confirmed} confirmed`}
           </p>
           <p className="meta mt-2 text-ink-faint">
             {display.payments.length > 0
@@ -132,6 +167,37 @@ export function ReviewScreen() {
       }
     >
       <StageList stages={display.stages} />
+
+      {incomes.length > 1 ? (
+        <div className="mt-10 max-w-xl">
+          <p className="eyebrow text-ink-faint">Verified employer</p>
+          <ul className="mt-3">
+            {incomes.map((row) => {
+              const active =
+                selected?.payerAddress.toLowerCase() === row.payerAddress.toLowerCase();
+              return (
+                <li key={row.payerAddress} className="border-t border-rule">
+                  <button
+                    type="button"
+                    onClick={() => selectPayer(row)}
+                    className={`flex w-full items-center justify-between py-4 text-left ${
+                      active ? "text-ink" : "text-ink-soft"
+                    }`}
+                  >
+                    <span>
+                      <span className="display-sm">{row.payerName}</span>
+                      <span className="meta mt-1 block text-ink-faint">
+                        {row.incomeBand?.label ?? "No range yet"}
+                      </span>
+                    </span>
+                    <span className="meta">{active ? "Selected" : "Use this"}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
 
       {display.payments.length > 0 ? (
         <ul className="mt-12 border-t border-rule">
@@ -163,14 +229,14 @@ export function ReviewScreen() {
       ) : null}
 
       <div className="mt-12">
-        {display.canContinue ? (
+        {canContinue ? (
           <ButtonLink href="/profile">
-            See your income profile
+            See your income
             <ArrowRight size={18} />
           </ButtonLink>
         ) : display.recovery ? null : (
           <p className="meta text-ink-faint">
-            Continue unlocks when every payment that can count has been confirmed.
+            Continue unlocks when three pay cycles in a row have been confirmed.
           </p>
         )}
       </div>

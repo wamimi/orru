@@ -10,6 +10,7 @@ import { ScreenFrame } from "@/components/app/ScreenFrame";
 import { useFlowSession } from "@/components/app/useFlowSession";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { parseOutcome, truncateAddress } from "@/lib/app";
+import { CREDITCOIN_ID } from "@/lib/chain";
 import { demoSubject } from "@/lib/mock";
 
 type StepStatus = "idle" | "working" | "done" | "error";
@@ -69,6 +70,7 @@ export function ConnectScreen() {
 
   useEffect(() => {
     if (cleared || qa || !privyReady || !authenticated || !liveAddress) return;
+    void ensureCreditcoin().catch(() => undefined);
     setConnect((status) => (status === "done" ? status : "done"));
     if (
       session.connected &&
@@ -113,6 +115,19 @@ export function ConnectScreen() {
     login({ loginMethods: ["wallet"] });
   }
 
+  async function ensureCreditcoin() {
+    const wallet = wallets.find((item) => item.address);
+    if (!wallet) return;
+    const current = wallet.chainId?.toString() ?? "";
+    if (
+      current === String(CREDITCOIN_ID) ||
+      current.endsWith(`:${CREDITCOIN_ID}`)
+    ) {
+      return;
+    }
+    await wallet.switchChain(CREDITCOIN_ID);
+  }
+
   async function onSign() {
     if (signatureError) {
       setSign("error");
@@ -131,6 +146,7 @@ export function ConnectScreen() {
       return;
     }
     try {
+      await ensureCreditcoin();
       const challengeResponse = await fetch(
         `/api/auth/challenge?address=${liveAddress}`,
       );
@@ -204,8 +220,8 @@ export function ConnectScreen() {
   return (
     <ScreenFrame
       kicker="01 · Connect"
-      title="Connect the wallet you get paid into."
-      lede="This has to be the address that receives pay — not a spare one. You will sign a short message to show it is yours. Nothing is moved."
+      title="Connect the payout account you get paid into."
+      lede="This has to be the address that receives pay — not a spare one. Sign to show this payout account is yours — this is free and moves no money."
     >
       {forcedEmpty ? (
         <Callout
@@ -221,7 +237,7 @@ export function ConnectScreen() {
         <Callout
           tone="error"
           title="This address is on a network we do not check yet"
-          body="Switch the wallet to Creditcoin and connect again. Other networks are ignored for now."
+          body="Switch the payout account to Creditcoin and connect again. Other networks are ignored for now."
           actionLabel="Try again"
           actionHref="/connect"
         />
@@ -243,7 +259,7 @@ export function ConnectScreen() {
         <div className="flex flex-col gap-10">
           <ActionStep
             number="01"
-            title="Connect the address"
+            title="Connect the payout account"
             body="We only read the address. No permission is granted to send funds."
             complete={connected}
             meta={
@@ -267,7 +283,7 @@ export function ConnectScreen() {
           <ActionStep
             number="02"
             title="Sign a short message"
-            body="The message says this address is yours. Signing costs nothing and can be cancelled. This is free and moves no money."
+            body="Sign to show this payout account is yours — this is free and moves no money."
             complete={signed}
             action={
               <Button
