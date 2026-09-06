@@ -1,10 +1,20 @@
 import { randomBytes } from "node:crypto"
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs"
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  writeSync,
+} from "node:fs"
 import { resolve } from "node:path"
 import { getAddress, type Hex } from "viem"
 import { bandFor } from "../../shared/bands.ts"
 import { commitmentFor } from "../../shared/commitment.ts"
-import { config, WORKER_ROOT } from "./config.js"
+import { config, ConfigError, REPO_ROOT, WORKER_ROOT } from "./config.js"
 import { log } from "./log.js"
 import type { PaymentRecord } from "./state.js"
 
@@ -33,8 +43,24 @@ export interface SlipBook {
   slips: Slip[]
 }
 
+/// Slips hold the only copy of the salts. The directory is therefore constrained
+/// rather than taken on trust: `WORKER_SLIP_DIR=../public/slips` would otherwise
+/// resolve into Next.js's public directory and serve every salary on the web.
 function slipDir(): string {
-  return resolve(WORKER_ROOT, process.env.WORKER_SLIP_DIR ?? "slips")
+  const dir = resolve(WORKER_ROOT, process.env.WORKER_SLIP_DIR ?? "slips")
+
+  const publicDir = resolve(REPO_ROOT, "public")
+  if (dir === publicDir || dir.startsWith(`${publicDir}/`)) {
+    throw new ConfigError(
+      `WORKER_SLIP_DIR resolves inside ${publicDir}, which Next.js serves publicly. ` +
+        `Slips contain the amounts and salts the proof exists to hide.`,
+    )
+  }
+  if (dir !== WORKER_ROOT && !dir.startsWith(`${WORKER_ROOT}/`)) {
+    throw new ConfigError(`WORKER_SLIP_DIR must stay under ${WORKER_ROOT}, got ${dir}`)
+  }
+
+  return dir
 }
 
 function slipPath(payer: string, recipient: string): string {
@@ -79,20 +105,31 @@ export function issueSlips(options: IssueSlipsOptions): SlipBook {
 
   const book: SlipBook = { version: 1, payer, payerName: options.payerName, recipient, slips }
 
-  mkdirSync(slipDir(), { recursive: true })
+  mkdirSync(slipDir(), { recursive: true, mode: 0o700 })
   const path = slipPath(payer, recipient)
 
   // Merge rather than overwrite: a payer issuing a second run must not destroy
   // the recipient's earlier slips, which are the only copy of those preimages.
   if (existsSync(path)) {
     const existing = JSON.parse(readFileSync(path, "utf8")) as SlipBook
-    const seen = new Set(book.slips.map((s) => s.commitment))
-    book.slips = [...existing.slips.filter((s) => !seen.has(s.commitment)), ...book.slips].sort(
-      (a, b) => (BigInt(a.period) < BigInt(b.period) ? -1 : 1),
+
+    // A random salt makes every reissue a different commitment, so a repeated
+    // period would silently shadow the anchored one rather than collide.
+    const clash = existing.slips.filter((e) => book.slips.some((n) => n.period === e.period))
+    if (clash.length > 0) {
+      throw new ConfigError(
+        `slips already exist for period(s) ${clash.map((c) => c.period).join(", ")} of ` +
+          `${recipient} from this payer. Reissuing would replace salts that may already be ` +
+          `anchored. Choose a later --from-period, or delete ${path} deliberately.`,
+      )
+    }
+
+    book.slips = [...existing.slips, ...book.slips].sort((a, b) =>
+      BigInt(a.period) < BigInt(b.period) ? -1 : 1,
     )
   }
 
-  writeFileSync(path, `${JSON.stringify(book, null, 2)}\n`)
+  writeAtomic(path, `${JSON.stringify(book, null, 2)}\n`)
 
   log.step("slips issued", {
     payer: options.payerName,
@@ -150,4 +187,18 @@ export function anchorCommand(book: SlipBook, account = "orru-payer"): string {
     `  --rpc-url $SEPOLIA_RPC_URL --account ${account} --password-file ~/.orru/${account}.pwd` +
     `\n\n# commitments: ${list}`
   )
+}
+
+/// Owner-only, flushed, then renamed into place. A partial write here would lose
+/// salts that exist in exactly one location.
+function writeAtomic(path: string, contents: string): void {
+  const tmp = `${path}.tmp`
+  const fd = openSync(tmp, "w", 0o600)
+  try {
+    writeSync(fd, contents)
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+  renameSync(tmp, path)
 }

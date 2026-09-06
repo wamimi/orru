@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { getAddress, isAddressEqual, type Hex } from "viem"
 import { bandFor } from "../../shared/bands.ts"
@@ -54,10 +54,18 @@ export async function prove(options: ProveOptions): Promise<ProofBundle> {
     )
   }
 
-  writeProverToml(window, subject, band.id)
-  runToolchain()
-
-  const { proof, publicInputs } = readOutputs()
+  // Prover.toml and the witness hold the amounts and salts in the clear. nargo
+  // requires them inside the package directory, so they are written owner-only
+  // and shredded once the proof exists — including when proving fails.
+  let proof: Hex
+  let publicInputs: Hex[]
+  try {
+    writeProverToml(window, subject, band.id)
+    runToolchain()
+    ;({ proof, publicInputs } = readOutputs())
+  } finally {
+    shredWitness()
+  }
   assertPublicInputsMatch(publicInputs, subject, band.id, window)
 
   const bundle: ProofBundle = {
@@ -271,7 +279,18 @@ function writeProverToml(window: PaymentRecord[], subject: `0x${string}`, band: 
     "",
   ].join("\n")
 
-  writeFileSync(resolve(c.circuitDir, "Prover.toml"), toml)
+  const path = resolve(c.circuitDir, "Prover.toml")
+  writeFileSync(path, toml, { mode: 0o600 })
+  chmodSync(path, 0o600)
+}
+
+/// Removes the private witness. `target/proof` and `target/public_inputs` are
+/// left: those are the public outputs and reveal nothing.
+function shredWitness(): void {
+  const c = config()
+  for (const relative of ["Prover.toml", "target/income_witness.gz"]) {
+    rmSync(resolve(c.circuitDir, relative), { force: true })
+  }
 }
 
 function runToolchain(): void {
@@ -376,12 +395,12 @@ function assertPublicInputsMatch(
 
 /// High 16 bytes then low 16 bytes. A full 32-byte digest exceeds the bn254
 /// scalar field, so the circuit carries it as two 128-bit Fields.
-function splitLimbs(commitment: Hex): [bigint, bigint] {
+export function splitLimbs(commitment: Hex): [bigint, bigint] {
   const value = BigInt(commitment)
   return [value >> 128n, value & ((1n << 128n) - 1n)]
 }
 
-function hexToBytes(hex: Hex): number[] {
+export function hexToBytes(hex: Hex): number[] {
   const body = hex.slice(2)
   const out: number[] = []
   for (let i = 0; i < body.length; i += 2) out.push(parseInt(body.slice(i, i + 2), 16))
