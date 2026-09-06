@@ -35,6 +35,39 @@ echo "== TypeScript =="
 echo "== Bands =="
 (cd shared && npx tsx bands.test.ts 2>&1 | tail -2) || fail=1
 
+echo "== Witness encoders =="
+# The worker proves with nargo, the browser with bb.js, and each has its own
+# implementation of the limb split and salt byte order. A divergence produces
+# proofs the deployed verifier rejects for no visible reason.
+if (cd worker && node --import tsx --test src/encoders.test.ts >/dev/null 2>&1); then
+  echo "  worker and browser encoders agree"
+else
+  echo "  ENCODERS DISAGREE - cd worker && node --import tsx --test src/encoders.test.ts"
+  fail=1
+fi
+
+echo "== Browser circuit artifact =="
+# Served to the browser, and must be the circuit the deployed verifier was
+# generated from. Stale here means every browser proof fails on-chain.
+if artifact_check=$(python3 - <<'PYEOF'
+import json, sys
+try:
+    built = json.load(open("circuits/income_proof/target/income_proof.json"))
+    served = json.load(open("public/circuit/income_proof.json"))
+except Exception as e:
+    print(f"unreadable: {e}"); sys.exit(1)
+for key in ("noir_version", "hash", "bytecode", "abi"):
+    if built.get(key) != served.get(key):
+        print(f"{key} differs from the compiled circuit"); sys.exit(1)
+print("matches the compiled circuit")
+PYEOF
+); then
+  echo "  $artifact_check"
+else
+  echo "  $artifact_check"
+  fail=1
+fi
+
 echo
 [ $fail -eq 0 ] && echo "EQUIVALENCE: GREEN" || echo "EQUIVALENCE: BROKEN"
 exit $fail

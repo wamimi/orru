@@ -181,3 +181,51 @@ test("exactly enough periods is a valid window", () => {
 test("fewer records than periods returns null", () => {
   assert.equal(pickWindow([15, 16].map(rec), 3), null)
 })
+
+// ------------------------------------------------------- approval throttling
+
+import { approvalIsFresh, APPROVAL_TTL_MS, withinAllowlist } from "./state.js"
+
+test("a fresh approval is reused, a stale one is rechecked", () => {
+  const now = Date.now()
+  const recent = new Date(now - 1000).toISOString()
+  assert.equal(approvalIsFresh({ approved: true, checkedAt: recent }, now), true)
+  assert.equal(approvalIsFresh({ approved: false, checkedAt: recent }, now), true)
+
+  const oldDenial = new Date(now - APPROVAL_TTL_MS.denied - 1000).toISOString()
+  assert.equal(
+    approvalIsFresh({ approved: false, checkedAt: oldDenial }, now),
+    false,
+    "a denial must expire so a newly approved payer is picked up",
+  )
+  assert.equal(
+    approvalIsFresh({ approved: true, checkedAt: oldDenial }, now),
+    true,
+    "an approval outlives a denial",
+  )
+})
+
+test("missing, unparsable or future-dated approvals are not trusted", () => {
+  const now = Date.now()
+  assert.equal(approvalIsFresh(undefined, now), false)
+  assert.equal(approvalIsFresh({ approved: true, checkedAt: "nonsense" }, now), false)
+  const future = new Date(now + 60_000).toISOString()
+  assert.equal(approvalIsFresh({ approved: true, checkedAt: future }, now), false)
+})
+
+test("the allowlist discards spam before any RPC call", () => {
+  const entries: [string, AnchorTx][] = []
+  for (let i = 0; i < 10_000; i++) {
+    entries.push([`0xspam${i}`, anchor(i, `0x${i.toString(16).padStart(40, "0")}`)])
+  }
+  entries.push(["0xreal", anchor(99_999, APPROVED)])
+
+  const kept = withinAllowlist(entries, new Set([APPROVED.toLowerCase()]))
+  assert.equal(kept.length, 1)
+  assert.equal(kept[0]?.[0], "0xreal")
+})
+
+test("an empty allowlist keeps everything, so the filter is opt-in", () => {
+  const entries: [string, AnchorTx][] = [["0xa", anchor(1, APPROVED)], ["0xb", anchor(2, UNAPPROVED)]]
+  assert.equal(withinAllowlist(entries, new Set()).length, 2)
+})
