@@ -3,6 +3,8 @@ import { config, ConfigError, LOADED_ENV_FILES } from "./config.js"
 import { log } from "./log.js"
 import { prove } from "./prove.js"
 import { scan, summarise } from "./scan.js"
+import { anchorCommand, issueSlips } from "./slips.js"
+import { writeSnapshot } from "./snapshot.js"
 import { loadState } from "./state.js"
 
 const USAGE = `orru worker
@@ -14,6 +16,11 @@ const USAGE = `orru worker
         --payer 0x..
         [--allow-unattested]
   status                   what is recorded and what is outstanding
+  snapshot                 write out/income-snapshot.json for the web app
+  slips --recipient 0x..   issue off-chain payment slips as a private payer, and
+        --payer 0x..       print the command to anchor their commitments
+        --amount N
+        [--from-period N] [--count N] [--name "Acme Ltd"]
   run [--submit]           scan then attest, once
 
 Options
@@ -92,9 +99,26 @@ async function main(): Promise<void> {
     case "status":
       await status()
       break
+    case "snapshot":
+      writeSnapshot()
+      break
+    case "slips": {
+      const amount = BigInt(requiredOption("amount"))
+      const book = issueSlips({
+        payer: requiredOption("payer"),
+        recipient: requiredOption("recipient"),
+        amount,
+        fromPeriod: Number(option("from-period") ?? 1),
+        count: Number(option("count") ?? 3),
+        payerName: option("name") ?? "Private payer",
+      })
+      process.stdout.write(`\nAnchor them with:\n\n${anchorCommand(book)}\n\n`)
+      break
+    }
     case "run":
       await scan()
       await attest({ submit: flag("submit"), limit })
+      writeSnapshot()
       break
     default:
       process.stdout.write(USAGE)

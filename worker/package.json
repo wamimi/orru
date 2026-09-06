@@ -11,7 +11,9 @@
     "status": "tsx src/index.ts status",
     "run": "tsx src/index.ts run",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/*.test.ts"
+    "test": "node --import tsx --test src/*.test.ts",
+    "snapshot": "tsx src/index.ts snapshot",
+    "slips": "tsx src/index.ts slips"
   },
   "dependencies": {
     "@gluwa/usc-sdk": "0.18.0",
