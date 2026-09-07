@@ -2,16 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowRight, CaretDown, Check, CircleNotch, Minus } from "@phosphor-icons/react";
+import { ArrowRight } from "@phosphor-icons/react";
 import { Callout } from "@/components/app/Callout";
+import { PaymentRow } from "@/components/app/PaymentRow";
 import { ScreenFrame } from "@/components/app/ScreenFrame";
+import { StageAside, StageList } from "@/components/app/StageList";
 import { useFlowSession } from "@/components/app/useFlowSession";
 import { ButtonLink } from "@/components/ui/Button";
-import { EvidenceBadge } from "@/components/ui/EvidenceBadge";
 import { parseOutcome } from "@/lib/app";
-import type { IncomeLookup } from "@/lib/income-types";
+import type { IncomeLookup, IncomeResponse } from "@/lib/income-types";
 import {
-  evidenceLinks,
   paymentsFromIncome,
   scenarioFromIncome,
 } from "@/lib/income-view";
@@ -20,26 +20,19 @@ import {
   reviewAt,
   scenarioFromState,
   type ReviewScenario,
-  type StageStatus,
 } from "@/lib/review-machine";
 
-function StageMark({ status }: { status: StageStatus }) {
-  if (status === "running") {
-    return (
-      <CircleNotch
-        size={18}
-        className="mt-0.5 shrink-0 animate-spin text-brand"
-      />
+function pickIncome(incomes: IncomeLookup[], selectedPayer: string | null): IncomeLookup | null {
+  if (incomes.length === 0) return null;
+  if (selectedPayer) {
+    const match = incomes.find(
+      (row) => row.payerAddress.toLowerCase() === selectedPayer.toLowerCase(),
     );
-  }
-  if (status === "done") {
-    return <Check size={18} className="mt-0.5 shrink-0 text-brand" />;
-  }
-  if (status === "failed" || status === "empty") {
-    return <Minus size={18} className="mt-0.5 shrink-0 text-ink-faint" />;
+    if (match) return match;
   }
   return (
-    <span className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-rule-strong" />
+    incomes.find((row) => row.verified && row.provableWindow) ??
+    incomes[0]
   );
 }
 
@@ -61,6 +54,7 @@ export function ReviewScreen() {
   );
   const [lookupError, setLookupError] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [incomes, setIncomes] = useState<IncomeLookup[]>(session.incomes);
 
   useEffect(() => {
     if (qa || !ready) return;
@@ -77,13 +71,24 @@ export function ReviewScreen() {
     })
       .then(async (response) => {
         if (!response.ok) throw new Error("lookup");
-        return (await response.json()) as IncomeLookup;
+        return (await response.json()) as IncomeResponse;
       })
-      .then((income) => {
+      .then((payload) => {
         if (cancelled) return;
-        update({ income });
-        setLivePayments(paymentsFromIncome(income));
-        setLiveScenario(scenarioFromIncome(income));
+        const rows = payload.incomes ?? [];
+        const selected = pickIncome(rows, session.income?.payerAddress ?? null);
+        setIncomes(rows);
+        update({
+          incomes: rows,
+          income: selected,
+        });
+        if (!selected) {
+          setLivePayments([]);
+          setLiveScenario("empty");
+          return;
+        }
+        setLivePayments(paymentsFromIncome(selected));
+        setLiveScenario(scenarioFromIncome(selected));
       })
       .catch(() => {
         if (cancelled) return;
@@ -94,7 +99,7 @@ export function ReviewScreen() {
     return () => {
       cancelled = true;
     };
-  }, [qa, ready, session.address, session.sessionToken, session.signed, update]);
+  }, [qa, ready, session.address, session.sessionToken, session.signed, session.income?.payerAddress, update]);
 
   const scenario = qa ? qaScenario : (liveScenario ?? "happy");
   const source = qa ? undefined : livePayments;
@@ -125,97 +130,94 @@ export function ReviewScreen() {
     ? reviewAt(400, "happy", [])
     : snap;
 
+  const confirmed = display.payments.filter(
+    (payment) => payment.evidence === "attested" || payment.evidence === "verified",
+  ).length;
+  const selected = session.income;
+  const canContinue = display.canContinue && (qa || Boolean(selected?.provableWindow));
+
+  function selectPayer(row: IncomeLookup) {
+    update({ income: row, incomes });
+    setLivePayments(paymentsFromIncome(row));
+    setLiveScenario(scenarioFromIncome(row));
+    setElapsed(20_000);
+  }
+
   return (
     <ScreenFrame
       kicker="02 · Review"
-      title="Each payment is found, then confirmed."
-      lede="Looking something up is not the same as confirming it. A payment only counts once it has been confirmed and the sender is recognised."
+      title="Checking your income."
+      lede="This is a short reveal of a record that is already confirmed. A payment only counts once the sender is a verified employer."
+      aside={
+        <StageAside>
+          <p className="eyebrow text-ink-faint">On this payout account</p>
+          <p className="display-md mt-4 text-ink">
+            {display.payments.length === 0
+              ? waitingForLive
+                ? "Checking"
+                : "No payments yet"
+              : `${selected?.periodsAttested ?? confirmed} confirmed`}
+          </p>
+          <p className="meta mt-2 text-ink-faint">
+            {display.payments.length > 0
+              ? `${display.payments.length} found`
+              : "Waiting on the chain"}
+          </p>
+        </StageAside>
+      }
     >
-      <ol className="divide-y divide-rule border-y border-rule">
-        {display.stages.map((stage) => (
-          <li key={stage.id} className="flex gap-4 py-5">
-            <StageMark status={stage.status} />
-            <div>
-              <p className="display-sm text-ink">{stage.title}</p>
-              <p className="mt-1 text-sm leading-relaxed text-ink-soft">
-                {stage.body}
-              </p>
-            </div>
-          </li>
-        ))}
-      </ol>
+      <StageList stages={display.stages} />
+
+      {incomes.length > 1 ? (
+        <div className="mt-10 max-w-xl">
+          <p className="eyebrow text-ink-faint">Verified employer</p>
+          <ul className="mt-3">
+            {incomes.map((row) => {
+              const active =
+                selected?.payerAddress.toLowerCase() === row.payerAddress.toLowerCase();
+              return (
+                <li key={row.payerAddress} className="border-t border-rule">
+                  <button
+                    type="button"
+                    onClick={() => selectPayer(row)}
+                    className={`flex w-full items-center justify-between py-4 text-left ${
+                      active ? "text-ink" : "text-ink-soft"
+                    }`}
+                  >
+                    <span>
+                      <span className="display-sm">{row.payerName}</span>
+                      <span className="meta mt-1 block text-ink-faint">
+                        {row.incomeBand?.label ?? "No range yet"}
+                      </span>
+                    </span>
+                    <span className="meta">{active ? "Selected" : "Use this"}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
 
       {display.payments.length > 0 ? (
-        <ul className="mt-10 divide-y divide-rule border-y border-rule">
-          {display.payments.map((payment) => {
-            const links = evidenceLinks(payment);
-            const open = expanded === payment.id;
-            return (
-              <li key={payment.id} className="py-4">
-                <button
-                  type="button"
-                  className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2 text-left"
-                  onClick={() =>
-                    setExpanded((current) =>
-                      current === payment.id ? null : payment.id,
-                    )
-                  }
-                  aria-expanded={open}
-                >
-                  <div>
-                    <p className="meta text-ink">{payment.period}</p>
-                    <p className="mt-1 text-sm text-ink-soft">
-                      {payment.payer} · {payment.received}
-                    </p>
-                  </div>
-                  <span className="flex items-center gap-2">
-                    <EvidenceBadge state={payment.evidence} />
-                    <CaretDown
-                      size={16}
-                      className={`text-ink-faint transition-tone ${open ? "rotate-180" : ""}`}
-                    />
-                  </span>
-                </button>
-                {open ? (
-                  <div className="mt-3 pl-0 text-sm leading-relaxed text-ink-soft">
-                    <p>
-                      {payment.sourceChain ?? "Payment record"}
-                      {payment.sourceTx ? " · incoming payment" : null}
-                    </p>
-                    {links.length > 0 ? (
-                      <div className="mt-2 flex flex-col items-start gap-1">
-                        {links.map((link) => (
-                          <a
-                            key={link.href}
-                            href={link.href}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="meta text-brand hover:text-brand-hover"
-                          >
-                            {link.label}
-                          </a>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="meta mt-2 text-ink-faint">
-                        No public record is attached to this row.
-                      </p>
-                    )}
-                    {payment.sourceTx && !payment.verifiedTx ? (
-                      <p className="meta mt-2 text-ink-faint">
-                        Found on Sepolia, chain confirmation pending.
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </li>
-            );
-          })}
+        <ul className="mt-12 border-t border-rule">
+          {display.payments.map((payment) => (
+            <PaymentRow
+              key={payment.id}
+              payment={payment}
+              open={expanded === payment.id}
+              onToggle={() =>
+                setExpanded((current) =>
+                  current === payment.id ? null : payment.id,
+                )
+              }
+            />
+          ))}
         </ul>
       ) : null}
 
       {display.recovery ? (
-        <div className="mt-10">
+        <div className="mt-12">
           <Callout
             tone={display.stages[0].status === "empty" ? "empty" : "error"}
             title={display.recovery.title}
@@ -226,15 +228,15 @@ export function ReviewScreen() {
         </div>
       ) : null}
 
-      <div className="mt-10">
-        {display.canContinue ? (
+      <div className="mt-12">
+        {canContinue ? (
           <ButtonLink href="/profile">
-            See your income profile
+            See your income
             <ArrowRight size={18} />
           </ButtonLink>
         ) : display.recovery ? null : (
           <p className="meta text-ink-faint">
-            Continue unlocks when every payment that can count has been confirmed.
+            Continue unlocks when three pay cycles in a row have been confirmed.
           </p>
         )}
       </div>

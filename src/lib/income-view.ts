@@ -30,7 +30,7 @@ export function paymentsFromIncome(income: IncomeLookup): Payment[] {
 }
 
 export function credentialFromIncome(income: IncomeLookup): CredentialData {
-  const periods = income.periodsVerified;
+  const periods = income.periodsAttested;
   const last = income.evidence
     .slice()
     .sort((a, b) => b.period - a.period)[0];
@@ -38,8 +38,8 @@ export function credentialFromIncome(income: IncomeLookup): CredentialData {
   return {
     id: "Not issued yet",
     band: income.incomeBand?.label ?? "—",
-    bandUnit: "per month",
-    periods: income.periodsConsecutive
+    bandUnit: "per pay cycle",
+    periods: income.provableWindow
       ? `${periods} consecutive`
       : `${periods} periods`,
     lastPayment: last ? formatReceivedAt(last.verifiedAt) : "—",
@@ -48,6 +48,47 @@ export function credentialFromIncome(income: IncomeLookup): CredentialData {
     status: "Preview",
   };
 }
+
+export function sharedFieldsFromIncome(income: IncomeLookup) {
+  return [
+    {
+      label: "Income band",
+      value: income.incomeBand?.label ?? "—",
+      state: "verified" as const,
+    },
+    {
+      label: "Consecutive periods",
+      value: String(income.periodsAttested),
+      state: "verified" as const,
+    },
+    {
+      label: "Most recent payment",
+      value: income.evidence[0]
+        ? formatReceivedAt(
+            [...income.evidence].sort((a, b) => b.period - a.period)[0].verifiedAt,
+          )
+        : "—",
+      state: "attested" as const,
+    },
+    {
+      label: "Verified employer",
+      value: income.payerName,
+      state: "attested" as const,
+    },
+    {
+      label: "Statement status",
+      value: "ready to issue",
+      state: "verified" as const,
+    },
+  ];
+}
+
+export const withheldFields = [
+  "Exact amount of each payment",
+  "Who your clients or employer are beyond the verified name",
+  "Your address's full payment history",
+  "Any other balance you hold",
+];
 
 export function explorerHref(payment: Payment): string | null {
   if (payment.verifiedTx) return creditcoinTxUrl(payment.verifiedTx);
@@ -76,11 +117,13 @@ export function evidenceLinks(
 
 export function scenarioFromIncome(
   income: IncomeLookup,
-): "happy" | "empty" | "unrecognised" | "failed" | "gap" | "short" {
-  if (income.verified) return "happy";
+): "happy" | "empty" | "unrecognised" | "failed" | "gap" | "short" | "pending" {
+  if (income.verified && income.provableWindow) return "happy";
   if (income.reason === "no_payments") return "empty";
   if (income.reason === "payer_not_approved") return "unrecognised";
   if (income.reason === "not_consecutive") return "gap";
   if (income.reason === "too_few_periods") return "short";
+  if (income.reason === "not_yet_verified") return "pending";
+  if (income.verified && !income.provableWindow) return "gap";
   return "failed";
 }

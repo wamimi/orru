@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAddress } from "viem";
-import { readSession, sessionCookieName } from "@/lib/auth";
-import { lookupIncome } from "@/lib/income";
+import { requireSession } from "@/lib/session-api";
+import { incomesForAddress, snapshotAvailable } from "@/lib/snapshot";
 
 export async function GET(
   request: NextRequest,
@@ -13,42 +13,23 @@ export async function GET(
   }
   const address = raw.toLowerCase() as `0x${string}`;
 
-  const bearer = request.headers.get("authorization");
-  const token =
-    bearer?.startsWith("Bearer ") ? bearer.slice(7) : request.cookies.get(sessionCookieName)?.value;
-  const sessionAddress = readSession(token);
-  if (!sessionAddress || sessionAddress !== address) {
+  const session = requireSession(request, address);
+  if (session instanceof NextResponse) return session;
+
+  if (!snapshotAvailable()) {
     return NextResponse.json(
-      { error: "Sign the short message before we look anything up." },
-      { status: 401 },
+      { error: "Income records are not available yet." },
+      { status: 503 },
     );
   }
 
   try {
-    const income = await lookupIncome(address);
-    return NextResponse.json({
-      verified: income.verified,
-      reason: income.reason,
-      payerName: income.payerName,
-      payerAddress: income.payerAddress,
-      payerTier: income.payerTier,
-      periodsVerified: income.periodsVerified,
-      periodsConsecutive: income.periodsConsecutive,
-      firstPeriod: income.firstPeriod,
-      latestPeriod: income.latestPeriod,
-      incomeBand: income.incomeBand,
-      evidence: income.evidence.map((row) => ({
-        period: row.period,
-        sourceChain: row.sourceChain,
-        sourceTx: row.sourceTx,
-        verifiedTx: row.verifiedTx,
-        verifiedAt: row.verifiedAt,
-      })),
-    });
+    const incomes = incomesForAddress(address);
+    return NextResponse.json({ address, incomes });
   } catch {
     return NextResponse.json(
-      { error: "Payments could not be confirmed." },
-      { status: 502 },
+      { error: "Income records are not available yet." },
+      { status: 503 },
     );
   }
 }

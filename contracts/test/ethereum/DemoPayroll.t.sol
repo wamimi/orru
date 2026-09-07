@@ -9,7 +9,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 
 import {DemoPayroll} from "../../src/ethereum/DemoPayroll.sol";
 import {PayerAnchor} from "../../src/ethereum/PayerAnchor.sol";
-import {MockUSDC, BlacklistUSDC, ReentrantUSDC, FeeOnTransferUSDC} from "../mocks/Tokens.sol";
+import {MockUSDC, BlacklistUSDC, ReentrantUSDC, FeeOnTransferUSDC, EighteenDecimalToken} from "../mocks/Tokens.sol";
 
 contract DemoPayrollTest is Test {
     // USDC has SIX decimals. 1_000e6 is one thousand dollars, not 1e-15 of one.
@@ -853,43 +853,20 @@ contract DemoPayrollTest is Test {
     // Cross-chain mode (S1)
     // =====================================================================
 
-    /// @dev On Base Sepolia there is no PayerAnchor to call — Attestcoin reads
-    ///      Ethereum only. The contract pays and emits; the same payer anchors
-    ///      those commitments on Ethereum Sepolia separately.
-    function test_crossChainMode_paysAndEmitsWithoutAnchoring() public {
-        DemoPayroll p = new DemoPayroll(IERC20(address(usdc)), PayerAnchor(address(0)), owner, keeper, PERIOD);
-        usdc.mint(address(p), FUNDING);
-
-        vm.prank(owner);
-        p.addRecipient(alice, WAGE_A);
-        vm.warp(block.timestamp + PERIOD);
-
-        vm.recordLogs();
-        vm.prank(keeper);
-        p.runPayroll();
-
-        assertEq(usdc.balanceOf(alice), WAGE_A, "the worker is really paid");
-
-        bool sawPaymentMade;
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-        for (uint256 i; i < logs.length; ++i) {
-            if (logs[i].topics[0] == PaymentMade.selector) sawPaymentMade = true;
-            assertTrue(
-                logs[i].topics[0] != PayerAnchor.PaymentAnchored.selector,
-                "must not anchor locally"
-            );
-        }
-        assertTrue(sawPaymentMade, "the commitment is still published for off-chain anchoring");
+    /// @dev Anchoring is mandatory. A payroll that cannot anchor produces
+    ///      payments nothing downstream can prove, so it must not deploy.
+    function test_anchorlessDeploymentIsRejected() public {
+        vm.expectRevert(DemoPayroll.ZeroAddress.selector);
+        new DemoPayroll(IERC20(address(usdc)), PayerAnchor(address(0)), owner, keeper, PERIOD);
     }
 
     // =====================================================================
     // Documented behaviour
     // =====================================================================
 
-    /// @dev With a fee-on-transfer token the recipient receives less than the
-    ///      amount the commitment records. Documented, not fixed: Circle USDC
-    ///      takes no fee and this contract handles no other token.
-    function test_feeOnTransfer_commitmentRecordsTheIntendedAmount() public {
+    /// @dev The commitment records `amount`, so a token that delivers less must
+    ///      abort the run rather than attest a figure that never arrived.
+    function test_feeOnTransferIsRejectedRatherThanCommitted() public {
         FeeOnTransferUSDC token = new FeeOnTransferUSDC();
         (PayerAnchor a, DemoPayroll p) = _deploy(IERC20(address(token)));
         token.mint(address(p), FUNDING);
@@ -898,14 +875,25 @@ contract DemoPayrollTest is Test {
         p.addRecipient(alice, WAGE_A);
         vm.warp(block.timestamp + PERIOD);
 
+        vm.roll(block.number + 1);
         vm.prank(keeper);
+        // The inner IncorrectAmountReceived surfaces as TransferFailed, which
+        // names the recipient the operator needs to look at.
+        vm.expectRevert(abi.encodeWithSelector(DemoPayroll.TransferFailed.selector, alice, 2));
         p.runPayroll();
 
-        assertLt(token.balanceOf(alice), WAGE_A, "recipient receives less than face value");
-        assertTrue(
+        assertEq(token.balanceOf(alice), 0, "nothing paid");
+        assertFalse(
             a.anchoredBy(address(p), p.commitmentFor(alice, WAGE_A, 2, p.saltFor(alice, 2))),
-            "commitment records the INTENDED amount, not the received amount"
+            "and nothing attested"
         );
+    }
+
+    /// @dev The token's decimals are load-bearing for every downstream limit.
+    function test_rejectsATokenWithoutSixDecimals() public {
+        EighteenDecimalToken bad = new EighteenDecimalToken();
+        vm.expectRevert(abi.encodeWithSelector(DemoPayroll.UnsupportedDecimals.selector, 18));
+        new DemoPayroll(IERC20(address(bad)), anchorContract, owner, keeper, PERIOD);
     }
 
     function test_withdraw_returnsUnspentFunding() public {

@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLogin, usePrivy, useSignMessage, useWallets } from "@privy-io/react-auth";
-import { ArrowRight, PenNib, Plugs } from "@phosphor-icons/react";
+import { ArrowRight } from "@phosphor-icons/react";
+import { ActionStep } from "@/components/app/ActionStep";
 import { Callout } from "@/components/app/Callout";
 import { ScreenFrame } from "@/components/app/ScreenFrame";
 import { useFlowSession } from "@/components/app/useFlowSession";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { parseOutcome, truncateAddress } from "@/lib/app";
+import { CREDITCOIN_ID } from "@/lib/chain";
 import { demoSubject } from "@/lib/mock";
 
 type StepStatus = "idle" | "working" | "done" | "error";
@@ -68,6 +70,7 @@ export function ConnectScreen() {
 
   useEffect(() => {
     if (cleared || qa || !privyReady || !authenticated || !liveAddress) return;
+    void ensureCreditcoin().catch(() => undefined);
     setConnect((status) => (status === "done" ? status : "done"));
     if (
       session.connected &&
@@ -112,6 +115,19 @@ export function ConnectScreen() {
     login({ loginMethods: ["wallet"] });
   }
 
+  async function ensureCreditcoin() {
+    const wallet = wallets.find((item) => item.address);
+    if (!wallet) return;
+    const current = wallet.chainId?.toString() ?? "";
+    if (
+      current === String(CREDITCOIN_ID) ||
+      current.endsWith(`:${CREDITCOIN_ID}`)
+    ) {
+      return;
+    }
+    await wallet.switchChain(CREDITCOIN_ID);
+  }
+
   async function onSign() {
     if (signatureError) {
       setSign("error");
@@ -130,6 +146,7 @@ export function ConnectScreen() {
       return;
     }
     try {
+      await ensureCreditcoin();
       const challengeResponse = await fetch(
         `/api/auth/challenge?address=${liveAddress}`,
       );
@@ -203,8 +220,8 @@ export function ConnectScreen() {
   return (
     <ScreenFrame
       kicker="01 · Connect"
-      title="Connect the wallet you get paid into."
-      lede="This has to be the address that receives pay — not a spare one. You will sign a short message to show it is yours. Nothing is moved."
+      title="Connect the payout account you get paid into."
+      lede="This has to be the address that receives pay — not a spare one. Sign to show this payout account is yours — this is free and moves no money."
     >
       {forcedEmpty ? (
         <Callout
@@ -220,7 +237,7 @@ export function ConnectScreen() {
         <Callout
           tone="error"
           title="This address is on a network we do not check yet"
-          body="Switch the wallet to Creditcoin and connect again. Other networks are ignored for now."
+          body="Switch the payout account to Creditcoin and connect again. Other networks are ignored for now."
           actionLabel="Try again"
           actionHref="/connect"
         />
@@ -239,59 +256,50 @@ export function ConnectScreen() {
       ) : null}
 
       {!forcedEmpty && !networkError ? (
-        <ol className="divide-y divide-rule border-y border-rule">
-          <li className="flex flex-col gap-4 py-6 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex gap-4">
-              <Plugs size={20} className="mt-0.5 shrink-0 text-brand" />
-              <div>
-                <p className="display-sm text-ink">Connect the address</p>
-                <p className="mt-1 max-w-md text-sm leading-relaxed text-ink-soft">
-                  We only read the address. No permission is granted to send
-                  funds.
-                </p>
-                {connected && displayAddress ? (
-                  <p className="meta mt-3 text-ink">{displayAddress}</p>
-                ) : null}
-              </div>
-            </div>
-            <Button
-              onClick={() => void onConnect()}
-              disabled={connected || forcedLoading || (!qa && !privyReady)}
-              className="shrink-0"
-            >
-              {forcedLoading || connect === "working"
-                ? "Looking…"
-                : connected
-                  ? "Connected"
-                  : "Connect"}
-            </Button>
-          </li>
-
-          <li className="flex flex-col gap-4 py-6 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex gap-4">
-              <PenNib size={20} className="mt-0.5 shrink-0 text-brand" />
-              <div>
-                <p className="display-sm text-ink">Sign a short message</p>
-                <p className="mt-1 max-w-md text-sm leading-relaxed text-ink-soft">
-                  The message says this address is yours. Signing costs nothing
-                  and can be cancelled. This is free and moves no money.
-                </p>
-              </div>
-            </div>
-            <Button
-              onClick={() => void onSign()}
-              disabled={!connected || signed || forcedLoading}
-              variant={connected ? "solid" : "outline"}
-              className="shrink-0"
-            >
-              {sign === "working"
-                ? "Waiting…"
-                : signed
-                  ? "Signed"
-                  : "Sign"}
-            </Button>
-          </li>
-        </ol>
+        <div className="flex flex-col gap-10">
+          <ActionStep
+            number="01"
+            title="Connect the payout account"
+            body="We only read the address. No permission is granted to send funds."
+            complete={connected}
+            meta={
+              connected && displayAddress ? (
+                <p className="meta text-ink">{displayAddress}</p>
+              ) : null
+            }
+            action={
+              <Button
+                onClick={() => void onConnect()}
+                disabled={connected || forcedLoading || (!qa && !privyReady)}
+              >
+                {forcedLoading || connect === "working"
+                  ? "Looking…"
+                  : connected
+                    ? "Connected"
+                    : "Connect"}
+              </Button>
+            }
+          />
+          <ActionStep
+            number="02"
+            title="Sign a short message"
+            body="Sign to show this payout account is yours — this is free and moves no money."
+            complete={signed}
+            action={
+              <Button
+                onClick={() => void onSign()}
+                disabled={!connected || signed || forcedLoading}
+                variant={connected ? "solid" : "outline"}
+              >
+                {sign === "working"
+                  ? "Waiting…"
+                  : signed
+                    ? "Signed"
+                    : "Sign"}
+              </Button>
+            }
+          />
+        </div>
       ) : null}
 
       <div className="mt-10 flex flex-wrap items-center gap-4">

@@ -27,8 +27,8 @@
   --color-accent-deep: var(--accent-deep);
   --color-surface: var(--surface);
 
-  --font-display: var(--font-archivo);
-  --font-sans: var(--font-instrument-sans);
+  --font-display: var(--font-syne);
+  --font-sans: var(--font-dm-sans);
   --font-mono: var(--font-jetbrains-mono);
 
   --radius-control: 6px;

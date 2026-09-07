@@ -47,7 +47,10 @@ deny_warnings = false
 
 # Deploy scripts record addresses to deployments/<chainid>.json. Shell history is
 # not a deployment record.
-fs_permissions = [{ access = "read-write", path = "./deployments" }]
+fs_permissions = [
+    { access = "read-write", path = "./deployments" },
+    { access = "read", path = "./test/fixtures" },
+]
 
 [profile.default.fuzz]
 runs = 512

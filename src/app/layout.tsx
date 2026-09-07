@@ -1,25 +1,7 @@
 import type { Metadata } from "next";
-import { Archivo, DM_Sans, Instrument_Sans, JetBrains_Mono, Syne } from "next/font/google";
+import { DM_Sans, JetBrains_Mono, Syne } from "next/font/google";
 import { IconProvider } from "@/components/IconProvider";
 import "./globals.css";
-
-const archivo = Archivo({
-  variable: "--font-archivo",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const instrumentSans = Instrument_Sans({
-  variable: "--font-instrument-sans",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
-  subsets: ["latin"],
-  display: "swap",
-});
 
 const syne = Syne({
   variable: "--font-syne",
@@ -35,14 +17,20 @@ const dmSans = DM_Sans({
   display: "swap",
 });
 
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
+  subsets: ["latin"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://orru.xyz"),
   title: {
-    default: "orru — prove crypto income. borrow against it.",
+    default: "orru — use your on-chain income as a credential",
     template: "%s — Orru",
   },
   description:
-    "Orru helps people paid in stablecoins prove recurring income privately and access credit against it — without a bank statement.",
+    "Orru turns stablecoin payments into a private income credential. Share a band with a fintech, a neobank, or anywhere proof of income is required.",
   alternates: { canonical: "/" },
   icons: {
     icon: [{ url: "/icon", type: "image/png" }],
@@ -54,7 +42,7 @@ export const metadata: Metadata = {
     siteName: "orru",
     title: "orru",
     description:
-      "Private proof of crypto income, and credit against it. Built for remote workers paid in stablecoins.",
+      "Use your on-chain income as a credential. Private income bands for fintechs, neobanks, and anyone who needs to show they earn.",
   },
 };
 
@@ -64,7 +52,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${archivo.variable} ${instrumentSans.variable} ${jetbrainsMono.variable} ${syne.variable} ${dmSans.variable} h-full`}
+      className={`${syne.variable} ${dmSans.variable} ${jetbrainsMono.variable} h-full`}
     >
       <body className="min-h-full antialiased">
         <IconProvider>{children}</IconProvider>

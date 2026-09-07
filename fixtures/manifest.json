@@ -1,0 +1,74 @@
+{
+  "generatedAt": "2026-09-06T19:58:28+00:00",
+  "note": "These proofs are built over the newest ATTESTED window at generation time. That window moves as the payroll keeps paying and the relayer keeps attesting. When it moves, these proofs still verify cryptographically but CredentialRegistry.issue rejects them with CommitmentNotAttestedToPayer, because the registry only accepts commitments it has actually seen attested. That is staleness, not a bug in your code. Ask Nelly to regenerate; it takes one command.",
+  "staleSymptom": "CommitmentNotAttestedToPayer(bytes32,address) on issue()",
+  "regeneratedBy": "Nelly \u2014 the worker state and Semuni's salts live only on her machine",
+  "proofs": [
+    {
+      "file": "proof-722533cA-payroll-band1.json",
+      "subject": "0x722533cA456a2B845b10e808B0e13Ec5e4134f27",
+      "evidencePayer": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "band": 1,
+      "bandLabel": "$500 - $1,000",
+      "periods": [
+        "18",
+        "19",
+        "20"
+      ],
+      "canSignIssuance": false
+    },
+    {
+      "file": "proof-Bb605cf7-payroll-band4.json",
+      "subject": "0xBb605cf7604ef843e9Df15559257a73989DAe75A",
+      "evidencePayer": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "band": 4,
+      "bandLabel": "$2,500 - $4,000",
+      "periods": [
+        "18",
+        "19",
+        "20"
+      ],
+      "canSignIssuance": false
+    },
+    {
+      "file": "proof-Bb605cf7-semuni-band6.json",
+      "subject": "0xBb605cf7604ef843e9Df15559257a73989DAe75A",
+      "evidencePayer": "0x0531203274075Ff79A07000BBDa2B0272C647d01",
+      "band": 6,
+      "bandLabel": "$6,000 - $10,000",
+      "periods": [
+        "1",
+        "2",
+        "3"
+      ],
+      "canSignIssuance": false
+    },
+    {
+      "file": "proof-e058c205-payroll-band5.json",
+      "subject": "0xe058c2056249287B429607814C9F21Ed48cE3B34",
+      "evidencePayer": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "band": 5,
+      "bandLabel": "$4,000 - $6,000",
+      "periods": [
+        "18",
+        "19",
+        "20"
+      ],
+      "canSignIssuance": false
+    },
+    {
+      "file": "proof-f6A48D18-payroll-band4.json",
+      "subject": "0xf6A48D18DA6072eaDdBF5D2BfB9FE9263dE0b66C",
+      "evidencePayer": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "band": 4,
+      "bandLabel": "$2,500 - $4,000",
+      "periods": [
+        "18",
+        "19",
+        "20"
+      ],
+      "canSignIssuance": true
+    }
+  ],
+  "snapshotGeneratedAt": "2026-09-06T19:58:28.673Z"
+}

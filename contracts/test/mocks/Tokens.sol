@@ -74,3 +74,31 @@ contract FeeOnTransferUSDC is MockUSDC {
         return super.transfer(to, amount - fee);
     }
 }
+
+/// @dev Eighteen decimals, to prove the six-decimal guard fires.
+contract EighteenDecimalToken is ERC20 {
+    constructor() ERC20("Eighteen", "EIGHT") {}
+
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
+}
+
+/// @dev Six decimals so it passes the metadata check, but delivers 1% less.
+contract SixDecimalFeeToken is ERC20 {
+    constructor() ERC20("Fee Six", "FEE6") {}
+
+    function decimals() public pure override returns (uint8) {
+        return 6;
+    }
+
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
+
+    function transfer(address to, uint256 amount) public override returns (bool) {
+        uint256 fee = amount / 100;
+        _transfer(msg.sender, address(0xdead), fee);
+        return super.transfer(to, amount - fee);
+    }
+}

@@ -25,6 +25,8 @@ const banned = [
   { id: "zktls", re: /\bzktls\b/i },
   { id: "eip-712", re: /\beip[-\s]?712\b/i },
   { id: "noir", re: /\bnoir\b/i },
+  { id: "commitment", re: /\bcommitments?\b/i },
+  { id: "nullifier", re: /\bnullifiers?\b/i },
 ];
 
 function walk(dir, acc = []) {

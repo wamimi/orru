@@ -13,6 +13,8 @@ export type FlowSession = {
   address: string | null;
   sessionToken: string | null;
   income: IncomeLookup | null;
+  incomes: IncomeLookup[];
+  credentialId: string | null;
 };
 
 const empty: FlowSession = {
@@ -22,6 +24,8 @@ const empty: FlowSession = {
   address: null,
   sessionToken: null,
   income: null,
+  incomes: [],
+  credentialId: null,
 };
 
 export function useFlowSession() {
