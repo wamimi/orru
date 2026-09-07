@@ -1,3 +1,4 @@
+import { Lockup } from "@/components/brand/Lockup";
 import { WaitlistForm } from "@/components/WaitlistForm";
 
 function ContourField() {
@@ -50,21 +51,22 @@ function ContourField() {
 
 export default function Home() {
   return (
-    <main className="hero-wash relative isolate min-h-svh overflow-hidden text-paper">
+    <main className="waitlist-shell hero-wash relative isolate min-h-svh overflow-hidden text-paper">
       <ContourField />
       <div className="relative z-10 mx-auto flex min-h-svh w-full max-w-3xl flex-col items-center justify-center px-6 py-16 text-center">
-        <p className="animate-rise font-display text-[clamp(3.4rem,14vw,7.5rem)] font-extrabold leading-[0.9] tracking-[-0.04em] text-paper">
-          orru
-        </p>
+        <div className="animate-rise text-paper">
+          <Lockup height={80} />
+        </div>
 
         <h1 className="animate-rise-delay-1 mt-8 max-w-2xl font-display text-[clamp(1.75rem,4.5vw,2.75rem)] font-bold leading-[1.1] tracking-[-0.03em]">
-          Prove crypto income.
-          <span className="block text-fog">Borrow against it.</span>
+          Use your on-chain income
+          <span className="block text-fog">as a credential.</span>
         </h1>
 
-        <p className="animate-rise-delay-2 mt-5 max-w-md text-base leading-relaxed text-mist md:text-lg">
-          Private verification for people paid in stablecoins — then credit that
-          finally sees them.
+        <p className="animate-rise-delay-2 mt-5 max-w-lg text-base leading-relaxed text-mist md:text-lg">
+          Orru turns stablecoin payments into a private income credential. Share
+          a band with a fintech, a neobank, or anywhere proof of income is
+          required.
         </p>
 
         <div className="animate-rise-delay-3 mt-10 w-full max-w-xl">

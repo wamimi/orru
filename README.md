@@ -9,7 +9,25 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000). Production `/` is the waitlist. The in-progress site is at `/preview`, and the consumer flow starts at `/connect`.
+
+## Structure
+
+```text
+src/
+├── app/
+│   ├── page.tsx         live waitlist (kept as /)
+│   ├── (marketing)/preview   in-progress public site
+│   └── (app)/           connect → review → profile → credential → share
+├── components/
+│   ├── WaitlistForm.tsx
+│   ├── app/             consumer flow screens
+│   ├── brand/           mark, wordmark, lockup
+│   ├── layout/          nav, footer
+│   └── ui/              design system primitives
+└── lib/                 shared config + mock integration seams
+public/brand/            exported logo assets
+```
 
 ## Waitlist delivery
 
@@ -42,8 +60,15 @@ Or import the GitHub repo at [vercel.com/new](https://vercel.com/new).
 3. At your registrar, add the DNS records Vercel shows (usually `A` / `CNAME`)
 4. Wait for SSL to provision — usually a few minutes
 
+## Copy
+
+```bash
+npm run check-copy
+```
+
 ## Stack
 
 - Next.js App Router
 - Tailwind CSS v4
+- Phosphor Icons
 - Waitlist API route

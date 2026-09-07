@@ -1245,3 +1245,4 @@ constraint failure.
 - Commitment encoding (shared with the circuit): `shared/commitment.ts` — **do not
   reimplement this anywhere, import it.** If the frontend and the circuit disagree
   about encoding by one byte, everything compiles and nothing ever verifies.
+</user_query>
