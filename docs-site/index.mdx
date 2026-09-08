@@ -1,0 +1,70 @@
+---
+title: "Orru"
+description: "Prove your income without revealing it, and without anyone taking your word for it."
+---
+
+Orru turns payments you already receive into income you can prove — to a lender,
+a landlord, or a platform — without revealing what you earn and without a bank,
+an employer letter, or a screenshot of your account.
+
+## How it works, in one paragraph
+
+Your payer records each payment on Ethereum. Attestcoin authenticates that record
+against attested Ethereum history, through Creditcoin's native query verifier —
+not an API call, a proof checked on-chain. You then prove, in zero knowledge, that
+every payment fell inside one income range. What lands on Creditcoin is a
+statement carrying that range and nothing else. No exact figure, ever.
+
+<CardGroup cols={3}>
+  <Card title="Verify a statement" icon="badge-check" href="/verify/overview">
+    You've been handed one and want to know if it's real. No account needed.
+  </Card>
+  <Card title="Become a payer" icon="building" href="/payers/overview">
+    Make the payments you already make provable for the people you pay.
+  </Card>
+  <Card title="Read it yourself" icon="code" href="/verify/on-chain">
+    Two contract calls. Skip us entirely.
+  </Card>
+</CardGroup>
+
+## What makes it different
+
+<AccordionGroup>
+  <Accordion title="Nobody takes anyone's word">
+    Etherscan finds the payments. Attestcoin proves them. Creditcoin accepts a
+    statement only when a proof verifies on-chain. There is no oracle in the
+    path and no step where you have to trust that we looked honestly.
+  </Accordion>
+  <Accordion title="The amount never leaves your machine">
+    Proving happens in your browser. The figure is an input to a zero-knowledge
+    proof and goes nowhere else. A server that proved on your behalf would see
+    it — which is why we do not do that.
+  </Accordion>
+  <Accordion title="Statements don't expire, and that's deliberate">
+    A statement attests a dated past window, and that stays true. Whether it is
+    recent enough is the reader's policy — a payday lender and a mortgage
+    underwriter will not agree, and neither should be forced into the other's
+    answer.
+  </Accordion>
+  <Accordion title="Your payer can't see who checked">
+    They record a payment. They do not learn that you applied for anything.
+  </Accordion>
+</AccordionGroup>
+
+## What it does not do
+
+<Warning>
+A statement does not prove future income, affordability, legal credit
+eligibility, or guaranteed repayment. It is a dated record of past payments —
+one input to a decision, not the decision.
+</Warning>
+
+## Live today
+
+Everything documented here is deployed on Ethereum Sepolia and Creditcoin
+testnet, and has been exercised end to end with real payments and real proofs.
+
+<Info>
+Testnet, and the credit pool is disclosed as simulated capital. The verification
+path is not simulated — the proofs are real and verified on-chain.
+</Info>

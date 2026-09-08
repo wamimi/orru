@@ -1,0 +1,108 @@
+---
+title: "Verify without us"
+description: "Read the statement from Creditcoin directly. Two calls, no dependency on Orru."
+---
+
+Everything the page and the API report comes from two contract reads. If you would
+rather not depend on us being up, honest, or in business next year, do them
+yourself.
+
+## The registry
+
+<CodeGroup>
+```text Creditcoin testnet
+chain id  102031
+RPC       https://rpc.cc3-testnet.creditcoin.network
+explorer  https://creditcoin-testnet.blockscout.com
+
+CredentialRegistry  0xc4694C8db29C668Bebb2502664228156F11a8481
+```
+</CodeGroup>
+
+## Two calls
+
+```solidity
+function statusOf(bytes32 credentialId) external view returns (uint8);
+// 0 unknown · 1 valid · 2 revoked
+
+function credentialOf(bytes32 credentialId) external view returns (Credential);
+
+struct Credential {
+    address subject;            // whose statement it is
+    address evidencePayer;      // every payment came from this payer
+    uint8   band;               // index into the band table
+    uint8   periodsProven;      // consecutive cycles covered
+    uint64  issuedAt;           // unix seconds
+    uint64  evidenceEndHeight;  // Ethereum block of the newest payment
+    uint64  revokedAt;          // 0 when live
+    bytes32 documentHash;       // optional, 0 when none
+}
+```
+
+<CodeGroup>
+```bash cast
+cast call 0xc4694C8db29C668Bebb2502664228156F11a8481 \
+  "statusOf(bytes32)(uint8)" \
+  0x7b6a24eb96a3eaf45f9dd61e5fcf9716ca4ad52a80a1ee09b93518ba150bf026 \
+  --rpc-url https://rpc.cc3-testnet.creditcoin.network
+```
+
+```ts viem
+const status = await client.readContract({
+  address: "0xc4694C8db29C668Bebb2502664228156F11a8481",
+  abi: credentialRegistryAbi,
+  functionName: "statusOf",
+  args: [credentialId],
+});
+
+const credential = await client.readContract({
+  address: "0xc4694C8db29C668Bebb2502664228156F11a8481",
+  abi: credentialRegistryAbi,
+  functionName: "credentialOf",
+  args: [credentialId],
+});
+```
+</CodeGroup>
+
+<Warning>
+`credentialOf` returns a populated struct for revoked statements too. Branch on
+`statusOf`.
+</Warning>
+
+## Bands
+
+`band` is an index. The table is fixed — it is compiled into the zero-knowledge
+circuit, so changing it would mean regenerating and redeploying the verifier.
+
+| id | Range | id | Range |
+|---|---|---|---|
+| 0 | $0 – $500 | 5 | $4,000 – $6,000 |
+| 1 | $500 – $1,000 | 6 | $6,000 – $10,000 |
+| 2 | $1,000 – $1,500 | 7 | $10,000 – $15,000 |
+| 3 | $1,500 – $2,500 | 8 | $15,000 – $25,000 |
+| 4 | $2,500 – $4,000 | 9 | $25,000+ |
+
+Bands are spaced multiplicatively rather than evenly, because income is roughly
+log-normal. Even steps are too coarse at the bottom — a single `$0–1,000` treats
+$50 and $999 alike — and too wide at the top. What is held constant is relative
+width, 50–67% per band, which is how much the band narrows your uncertainty.
+
+## Going deeper
+
+If you want to check the evidence rather than the conclusion,
+`AttestationRegistry` at `0x47172643d148300d2649C475d68a5bD49267e60C` answers
+per commitment:
+
+```solidity
+function acceptedByPayer(bytes32 commitment, address payer) external view returns (bool);
+function provenAtHeight(bytes32 commitment, address payer) external view returns (uint64);
+```
+
+That is the record of what Attestcoin authenticated, independent of any
+statement issued from it.
+
+## Why this page exists
+
+A credential you can only verify through the issuer's API is a credential you
+have to trust the issuer about. The contract is the product; the API is
+convenience.
