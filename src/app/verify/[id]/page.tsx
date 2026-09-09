@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Callout } from "@/components/app/Callout";
 import { ScreenFrame } from "@/components/app/ScreenFrame";
 import { PublicChrome } from "@/components/public/PublicChrome";
+import { aliasFromCredentialId } from "@/lib/alias";
 import { truncateHex } from "@/lib/chain";
 import { readCredential } from "@/lib/verify";
 
@@ -16,7 +17,21 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  return { title: `Statement ${truncateHex(id)}` };
+  let label = id;
+  try {
+    label = decodeURIComponent(id);
+  } catch {
+    /* keep raw */
+  }
+  return { title: `Statement ${label}` };
+}
+
+function labelFromParam(id: string): string {
+  try {
+    return decodeURIComponent(id);
+  } catch {
+    return id;
+  }
 }
 
 function formatDate(value: string | null): string {
@@ -37,7 +52,8 @@ export default async function VerifyPage({
 }) {
   const { id } = await params;
   const credential = await readCredential(id);
-  const shortId = truncateHex(id);
+  const alias = credential.alias ?? aliasFromCredentialId(credential.credentialId);
+  const shortHex = truncateHex(credential.credentialId);
 
   if (credential.status === "unknown") {
     return (
@@ -48,7 +64,7 @@ export default async function VerifyPage({
             title="Unknown statement"
             body="Nothing on Creditcoin matches this id. Check the link and try again."
           />
-          <p className="meta mt-8 text-ink-faint">{shortId}</p>
+          <p className="meta mt-8 text-ink-faint">{labelFromParam(id)}</p>
         </ScreenFrame>
       </PublicChrome>
     );
@@ -77,7 +93,9 @@ export default async function VerifyPage({
           <p className="meta text-ink-faint">
             {revoked ? "Revoked" : "Valid"}
             <span className="mx-3 text-rule-strong">·</span>
-            {shortId}
+            {alias}
+            <span className="mx-3 text-rule-strong">·</span>
+            {shortHex}
           </p>
           <p className="display-md mt-3 text-ink">
             {credential.incomeBand?.label ?? "—"}

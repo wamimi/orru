@@ -174,6 +174,9 @@ export default function Home() {
                       {primaryCta.label}
                       <ArrowRight size={18} />
                     </ButtonLink>
+                    <ButtonLink href="/check" variant="outline">
+                      Check a statement
+                    </ButtonLink>
                     <a
                       href="#how"
                       className="text-sm text-ink-soft underline decoration-rule-strong underline-offset-4 transition-tone hover:text-ink"

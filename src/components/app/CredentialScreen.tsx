@@ -9,6 +9,7 @@ import { ScreenFrame } from "@/components/app/ScreenFrame";
 import { useFlowSession } from "@/components/app/useFlowSession";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { HiddenFields, SharedFields } from "@/components/ui/FieldDisclosure";
+import { aliasFromCredentialId, verifyPath } from "@/lib/alias";
 import { parseOutcome, truncateAddress } from "@/lib/app";
 import { creditcoinTxUrl, truncateHex } from "@/lib/chain";
 import type { ProofBundle } from "@/lib/issue-types";
@@ -16,7 +17,7 @@ import {
   sharedFieldsFromIncome,
   withheldFields,
 } from "@/lib/income-view";
-import { demoCredential, sharedWithLender, withheldFromLender } from "@/lib/mock";
+import { sharedWithLender, withheldFromLender } from "@/lib/mock";
 
 type IssueStage = "idle" | "preparing" | "signing" | "sending" | "done" | "error";
 
@@ -108,9 +109,11 @@ export function CredentialScreen() {
       </div>
 
       <p className="meta mt-12 text-ink-faint">
-        {issued ? truncateHex(issued.id) : demoCredential.id}
+        {issued
+          ? `${aliasFromCredentialId(issued.id)} · ${truncateHex(issued.id)}`
+          : "Not issued yet"}
         <span className="mx-3 text-rule-strong">·</span>
-        {session.income?.payerName ?? demoCredential.issuanceRef}
+        {session.income?.payerName ?? "Verified employer"}
       </p>
 
       {working ? (
@@ -130,10 +133,10 @@ export function CredentialScreen() {
           <Callout
             tone="info"
             title="Your statement is issued"
-            body={`Anyone can check ${truncateHex(issued.id)} without an account.`}
+            body={`Anyone can check ${aliasFromCredentialId(issued.id)} without an account.`}
           >
             <div className="mt-5 flex flex-wrap gap-3">
-              <ButtonLink href={`/verify/${issued.id}`}>Open the public page</ButtonLink>
+              <ButtonLink href={verifyPath(aliasFromCredentialId(issued.id))}>Open the public page</ButtonLink>
               {issued.txHash ? (
                 <a
                   href={creditcoinTxUrl(issued.txHash)}

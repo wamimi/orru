@@ -1,4 +1,5 @@
-import { isHex } from "viem";
+import { aliasFromCredentialId, isCredentialId } from "@/lib/alias";
+import { resolveCredentialId } from "@/lib/alias-store";
 import { BANDS } from "@/lib/bands";
 import { CREDENTIAL_STATUS, credentialRegistryAbi, type CredentialStatus } from "@/lib/abi";
 import { ADDRESSES, CREDITCOIN_ID } from "@/lib/chain";
@@ -6,6 +7,7 @@ import { creditcoinClient, sepoliaClient } from "@/lib/clients";
 
 export type VerifyPayload = {
   credentialId: `0x${string}`;
+  alias: string | null;
   status: CredentialStatus;
   issuedAt: string | null;
   revokedAt: string | null;
@@ -23,10 +25,6 @@ export type VerifyPayload = {
 };
 
 const heightCache = new Map<string, string>();
-
-function isBytes32(value: string): value is `0x${string}` {
-  return isHex(value) && value.length === 66;
-}
 
 function isoFromUnix(seconds: bigint): string | null {
   if (seconds === BigInt(0)) return null;
@@ -49,8 +47,12 @@ async function dateForSepoliaHeight(height: bigint): Promise<string | null> {
 }
 
 export function unknownVerify(id: string): VerifyPayload {
+  const credentialId = (isCredentialId(id)
+    ? id.toLowerCase()
+    : `0x${"00".repeat(32)}`) as `0x${string}`;
   return {
-    credentialId: (isBytes32(id) ? id : `0x${"00".repeat(32)}`) as `0x${string}`,
+    credentialId,
+    alias: isCredentialId(id) ? aliasFromCredentialId(credentialId) : null,
     status: "unknown",
     issuedAt: null,
     revokedAt: null,
@@ -69,7 +71,8 @@ export function unknownVerify(id: string): VerifyPayload {
 }
 
 export async function readCredential(id: string): Promise<VerifyPayload> {
-  if (!isBytes32(id)) return unknownVerify(id);
+  const credentialId = resolveCredentialId(id);
+  if (!credentialId) return unknownVerify(id);
 
   const address = ADDRESSES[CREDITCOIN_ID].credentialRegistry;
   const [statusCode, credential] = await Promise.all([
@@ -77,25 +80,26 @@ export async function readCredential(id: string): Promise<VerifyPayload> {
       address,
       abi: credentialRegistryAbi,
       functionName: "statusOf",
-      args: [id],
+      args: [credentialId],
     }),
     creditcoinClient.readContract({
       address,
       abi: credentialRegistryAbi,
       functionName: "credentialOf",
-      args: [id],
+      args: [credentialId],
     }),
   ]);
 
   const status = CREDENTIAL_STATUS[Number(statusCode)] ?? "unknown";
-  if (status === "unknown") return unknownVerify(id);
+  if (status === "unknown") return unknownVerify(credentialId);
 
   const evidenceEndDate = await dateForSepoliaHeight(credential.evidenceEndHeight);
   const issuedAt = isoFromUnix(credential.issuedAt);
   const band = BANDS[credential.band] ?? null;
 
   return {
-    credentialId: id,
+    credentialId,
+    alias: aliasFromCredentialId(credentialId),
     status,
     issuedAt,
     revokedAt: isoFromUnix(credential.revokedAt),

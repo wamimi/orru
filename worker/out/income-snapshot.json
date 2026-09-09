@@ -1,0 +1,231 @@
+{
+  "generatedAt": "2026-09-06T12:56:04.000Z",
+  "note": "Fixture until the live worker snapshot is dropped in this folder. Prefixes match the documented test wallets.",
+  "payers": {
+    "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d": { "name": "Orru Demo Payroll", "tier": 1 },
+    "0x0531203274075Ff79A07000BBDa2B0272C647d01": { "name": "Semuni", "tier": 1 }
+  },
+  "recipients": [
+    {
+      "address": "0xf6A48D18DA6072eaDdBF5D2BfB9FE9263dE0b66C",
+      "verified": true,
+      "payerAddress": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "payerName": "Orru Demo Payroll",
+      "payerTier": 1,
+      "periodsPaid": 3,
+      "periodsAttested": 3,
+      "evidencePayer": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "provableWindow": { "from": 2, "to": 4, "consecutive": true },
+      "incomeBand": { "id": 4, "label": "$2,500 – $4,000" },
+      "evidence": [
+        {
+          "period": 4,
+          "sourceChain": "Ethereum Sepolia",
+          "sourceTx": "0x1111111111111111111111111111111111111111111111111111111111111111",
+          "sourceBlock": 11626539,
+          "verifiedTx": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "verifiedAt": "2026-09-04T09:12:00Z",
+          "attested": true
+        },
+        {
+          "period": 3,
+          "sourceChain": "Ethereum Sepolia",
+          "sourceTx": "0x3333333333333333333333333333333333333333333333333333333333333333",
+          "sourceBlock": 11620000,
+          "verifiedTx": "0x4444444444444444444444444444444444444444444444444444444444444444",
+          "verifiedAt": "2026-09-03T09:12:00Z",
+          "attested": true
+        },
+        {
+          "period": 2,
+          "sourceChain": "Ethereum Sepolia",
+          "sourceTx": "0x5555555555555555555555555555555555555555555555555555555555555555",
+          "sourceBlock": 11613000,
+          "verifiedTx": "0x6666666666666666666666666666666666666666666666666666666666666666",
+          "verifiedAt": "2026-09-02T09:12:00Z",
+          "attested": true
+        }
+      ]
+    },
+    {
+      "address": "0xBb605cf700000000000000000000000000Dae75A",
+      "verified": true,
+      "payerAddress": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "payerName": "Orru Demo Payroll",
+      "payerTier": 1,
+      "periodsPaid": 3,
+      "periodsAttested": 3,
+      "evidencePayer": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "provableWindow": { "from": 1, "to": 3, "consecutive": true },
+      "incomeBand": { "id": 4, "label": "$2,500 – $4,000" },
+      "evidence": [
+        {
+          "period": 3,
+          "sourceChain": "Ethereum Sepolia",
+          "sourceTx": "0x7777777777777777777777777777777777777777777777777777777777777777",
+          "sourceBlock": 11620000,
+          "verifiedTx": "0x8888888888888888888888888888888888888888888888888888888888888888",
+          "verifiedAt": "2026-09-03T11:00:00Z",
+          "attested": true
+        },
+        {
+          "period": 2,
+          "sourceChain": "Ethereum Sepolia",
+          "sourceTx": "0x9999999999999999999999999999999999999999999999999999999999999999",
+          "sourceBlock": 11613000,
+          "verifiedTx": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "verifiedAt": "2026-09-02T11:00:00Z",
+          "attested": true
+        },
+        {
+          "period": 1,
+          "sourceChain": "Ethereum Sepolia",
+          "sourceTx": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "sourceBlock": 11606000,
+          "verifiedTx": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "verifiedAt": "2026-09-01T11:00:00Z",
+          "attested": true
+        }
+      ]
+    },
+    {
+      "address": "0xBb605cf700000000000000000000000000Dae75A",
+      "verified": true,
+      "payerAddress": "0x0531203274075Ff79A07000BBDa2B0272C647d01",
+      "payerName": "Semuni",
+      "payerTier": 1,
+      "periodsPaid": 3,
+      "periodsAttested": 3,
+      "evidencePayer": "0x0531203274075Ff79A07000BBDa2B0272C647d01",
+      "provableWindow": { "from": 1, "to": 3, "consecutive": true },
+      "incomeBand": { "id": 6, "label": "$6,000 – $10,000" },
+      "evidence": [
+        {
+          "period": 3,
+          "sourceChain": "Ethereum Sepolia",
+          "sourceTx": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "sourceBlock": 11646662,
+          "verifiedTx": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "verifiedAt": "2026-09-04T12:00:00Z",
+          "attested": true
+        },
+        {
+          "period": 2,
+          "sourceChain": "Ethereum Sepolia",
+          "sourceTx": "0x1212121212121212121212121212121212121212121212121212121212121212",
+          "sourceBlock": 11640000,
+          "verifiedTx": "0x1313131313131313131313131313131313131313131313131313131313131313",
+          "verifiedAt": "2026-09-03T12:00:00Z",
+          "attested": true
+        },
+        {
+          "period": 1,
+          "sourceChain": "Ethereum Sepolia",
+          "sourceTx": "0x1414141414141414141414141414141414141414141414141414141414141414",
+          "sourceBlock": 11633000,
+          "verifiedTx": "0x1515151515151515151515151515151515151515151515151515151515151515",
+          "verifiedAt": "2026-09-02T12:00:00Z",
+          "attested": true
+        }
+      ]
+    },
+    {
+      "address": "0xe058c20500000000000000000000000000cE3B34",
+      "verified": true,
+      "payerAddress": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "payerName": "Orru Demo Payroll",
+      "payerTier": 1,
+      "periodsPaid": 3,
+      "periodsAttested": 3,
+      "evidencePayer": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "provableWindow": { "from": 1, "to": 3, "consecutive": true },
+      "incomeBand": { "id": 5, "label": "$4,000 – $6,000" },
+      "evidence": [
+        {
+          "period": 3,
+          "sourceChain": "Ethereum Sepolia",
+          "sourceTx": "0x1616161616161616161616161616161616161616161616161616161616161616",
+          "sourceBlock": 11620000,
+          "verifiedTx": "0x1717171717171717171717171717171717171717171717171717171717171717",
+          "verifiedAt": "2026-09-03T08:00:00Z",
+          "attested": true
+        }
+      ]
+    },
+    {
+      "address": "0x722533cA00000000000000000000000000134f27",
+      "verified": true,
+      "payerAddress": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "payerName": "Orru Demo Payroll",
+      "payerTier": 1,
+      "periodsPaid": 3,
+      "periodsAttested": 3,
+      "evidencePayer": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "provableWindow": { "from": 1, "to": 3, "consecutive": true },
+      "incomeBand": { "id": 1, "label": "$500 – $1,000" },
+      "evidence": [
+        {
+          "period": 3,
+          "sourceChain": "Ethereum Sepolia",
+          "sourceTx": "0x1818181818181818181818181818181818181818181818181818181818181818",
+          "sourceBlock": 11620000,
+          "verifiedTx": "0x1919191919191919191919191919191919191919191919191919191919191919",
+          "verifiedAt": "2026-09-03T08:00:00Z",
+          "attested": true
+        }
+      ]
+    },
+    {
+      "address": "0x0000000000000000000000000000000000000001",
+      "verified": false,
+      "reason": "not_yet_verified",
+      "payerAddress": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "payerName": "Orru Demo Payroll",
+      "payerTier": 1,
+      "periodsPaid": 3,
+      "periodsAttested": 0,
+      "provableWindow": null,
+      "incomeBand": null,
+      "evidence": []
+    },
+    {
+      "address": "0x0000000000000000000000000000000000000002",
+      "verified": false,
+      "reason": "too_few_periods",
+      "payerAddress": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "payerName": "Orru Demo Payroll",
+      "payerTier": 1,
+      "periodsPaid": 2,
+      "periodsAttested": 2,
+      "provableWindow": null,
+      "incomeBand": { "id": 4, "label": "$2,500 – $4,000" },
+      "evidence": []
+    },
+    {
+      "address": "0x0000000000000000000000000000000000000003",
+      "verified": false,
+      "reason": "not_consecutive",
+      "payerAddress": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "payerName": "Orru Demo Payroll",
+      "payerTier": 1,
+      "periodsPaid": 4,
+      "periodsAttested": 4,
+      "provableWindow": null,
+      "incomeBand": { "id": 4, "label": "$2,500 – $4,000" },
+      "evidence": []
+    },
+    {
+      "address": "0x0000000000000000000000000000000000000004",
+      "verified": false,
+      "reason": "payer_not_approved",
+      "payerAddress": "0x0000000000000000000000000000000000000099",
+      "payerName": "Unknown sender",
+      "payerTier": 0,
+      "periodsPaid": 3,
+      "periodsAttested": 0,
+      "provableWindow": null,
+      "incomeBand": null,
+      "evidence": []
+    }
+  ]
+}

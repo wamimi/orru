@@ -4,6 +4,7 @@ import { credentialRegistryAbi } from "@/lib/abi";
 import { ADDRESSES, CREDITCOIN_ID } from "@/lib/chain";
 import { creditcoinClient } from "@/lib/clients";
 import { friendlyError } from "@/lib/errors";
+import { registerAlias } from "@/lib/alias-store";
 import { subjectFromPublicInputs } from "@/lib/issue";
 import { relayerConfigured, relayerWallet } from "@/lib/relayer";
 import { requireSession } from "@/lib/session-api";
@@ -87,8 +88,11 @@ export async function POST(request: NextRequest) {
       args: [body.publicInputs, subject],
     });
 
+    const alias = registerAlias(credentialId);
+
     return NextResponse.json({
       credentialId,
+      alias,
       txHash,
       status: "issued",
     });
