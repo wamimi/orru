@@ -10,6 +10,7 @@ import { StageAside, StageList } from "@/components/app/StageList";
 import { useFlowSession } from "@/components/app/useFlowSession";
 import { ButtonLink } from "@/components/ui/Button";
 import { parseOutcome } from "@/lib/app";
+import { prover } from "@/lib/prove";
 import type { IncomeLookup, IncomeResponse } from "@/lib/income-types";
 import {
   paymentsFromIncome,
@@ -55,6 +56,12 @@ export function ReviewScreen() {
   const [lookupError, setLookupError] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [incomes, setIncomes] = useState<IncomeLookup[]>(session.incomes);
+
+  // Most of the wait on the statement screen is the one-time download, not the
+  // work. Starting it here spends it while the payments are being read.
+  useEffect(() => {
+    prover.prepare();
+  }, []);
 
   useEffect(() => {
     if (qa || !ready) return;

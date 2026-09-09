@@ -20,8 +20,14 @@ export function subjectFromPublicInputs(publicInputs: Hex[]): `0x${string}` {
   return `0x${first.slice(-40)}` as `0x${string}`;
 }
 
+/** Everything the authorization binds. A full bundle satisfies it. */
+export type IssueSubject = Pick<
+  ProofBundle,
+  "subject" | "evidencePayer" | "proof" | "publicInputs"
+>;
+
 export async function buildIssueTypedData(
-  bundle: ProofBundle,
+  bundle: IssueSubject,
   documentHash: Hex = ZERO_BYTES32,
 ) {
   const verifyingContract = ADDRESSES[CREDITCOIN_ID].credentialRegistry;
