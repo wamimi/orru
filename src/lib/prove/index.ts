@@ -24,9 +24,13 @@ export class Prover {
     return this.worker
   }
 
-  /** Starts the worker and lets it fetch the circuit before it is needed. */
+  /**
+   * Fetches the circuit and starts the prover before either is needed. Most of
+   * the wait is this, not the proving, so calling it a screen early hides it.
+   */
   prepare(): void {
-    this.ensure()
+    const worker = this.ensure()
+    worker.postMessage({ id: 0, warm: true })
   }
 
   prove(input: ProveInput, onProgress?: (p: ProveProgress) => void): Promise<ProveResult> {

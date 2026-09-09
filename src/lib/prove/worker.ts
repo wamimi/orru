@@ -4,13 +4,19 @@ import { Barretenberg, UltraHonkBackend } from "@aztec/bb.js"
 import { toNoirInputs } from "./witness"
 import { PUBLIC_INPUTS, type ProveInput, type ProveResult } from "./types"
 
-type Request = { id: number; input: ProveInput; circuitUrl?: string }
+type Request =
+  | { id: number; warm: true; circuitUrl?: string }
+  | { id: number; input: ProveInput; circuitUrl?: string }
 type Response =
   | { id: number; ok: true; result: ProveResult }
+  | { id: number; ok: true; warmed: true }
   | { id: number; ok: false; error: string }
   | { id: number; progress: "loading" | "witness" | "proving" }
 
+const DEFAULT_CIRCUIT = "/circuit/income_proof.json"
+
 let circuitPromise: Promise<{ bytecode: string; abi: unknown }> | null = null
+let apiPromise: Promise<Barretenberg> | null = null
 
 function loadCircuit(url: string) {
   circuitPromise ??= fetch(url).then((r) => {
@@ -20,25 +26,39 @@ function loadCircuit(url: string) {
   return circuitPromise
 }
 
+// Held open rather than created per proof: starting it fetches the WASM and the
+// reference string, which is most of the wall clock. Terminating the worker
+// releases it.
+function api() {
+  apiPromise ??= Barretenberg.new({
+    threads: self.crossOriginIsolated ? (navigator.hardwareConcurrency ?? 4) : 1,
+  })
+  return apiPromise
+}
+
 self.onmessage = async (event: MessageEvent<Request>) => {
-  const { id, input, circuitUrl = "/circuit/income_proof.json" } = event.data
+  const { id, circuitUrl = DEFAULT_CIRCUIT } = event.data
   const post = (m: Response) => self.postMessage(m)
 
-  let api: Barretenberg | undefined
   try {
+    if ("warm" in event.data) {
+      await Promise.all([loadCircuit(circuitUrl), api()])
+      post({ id, ok: true, warmed: true })
+      return
+    }
+
     post({ id, progress: "loading" })
     const circuit = await loadCircuit(circuitUrl)
 
     post({ id, progress: "witness" })
     const noir = new Noir(circuit as never)
-    const { witness } = await noir.execute(toNoirInputs(input) as never)
+    const { witness } = await noir.execute(toNoirInputs(event.data.input) as never)
 
     post({ id, progress: "proving" })
     // 'evm' is the keccak transcript with ZK — the same setting the verification
     // key and the deployed Solidity verifier were generated with. Any other
     // target produces a proof that fails on-chain for no visible reason.
-    api = await Barretenberg.new({ threads: navigator.hardwareConcurrency ?? 4 })
-    const backend = new UltraHonkBackend(circuit.bytecode, api)
+    const backend = new UltraHonkBackend(circuit.bytecode, await api())
     const { proof, publicInputs } = await backend.generateProof(witness, {
       verifierTarget: "evm",
     })
@@ -57,7 +77,5 @@ self.onmessage = async (event: MessageEvent<Request>) => {
     })
   } catch (error) {
     post({ id, ok: false, error: error instanceof Error ? error.message : String(error) })
-  } finally {
-    await api?.destroy()
   }
 }

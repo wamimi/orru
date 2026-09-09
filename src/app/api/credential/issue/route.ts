@@ -62,10 +62,37 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const registry = ADDRESSES[CREDITCOIN_ID].credentialRegistry;
+
   try {
+    // Pure over the statement and the subject, so it is known before the write.
+    const credentialId = await creditcoinClient.readContract({
+      address: registry,
+      abi: credentialRegistryAbi,
+      functionName: "claimKeyFor",
+      args: [body.publicInputs, subject],
+    });
+
+    // The registry refuses a second statement over the same pay cycles. Reading
+    // it here returns the id of the one that already exists, so the caller can
+    // show that statement instead of an error.
+    const existing = await creditcoinClient.readContract({
+      address: registry,
+      abi: credentialRegistryAbi,
+      functionName: "statusOf",
+      args: [credentialId],
+    });
+    if (Number(existing) !== 0) {
+      return NextResponse.json(
+        { error: "You already have a statement for these pay cycles.", credentialId },
+        { status: 409 },
+      );
+    }
+
     const wallet = relayerWallet();
-    const txHash = await wallet.writeContract({
-      address: ADDRESSES[CREDITCOIN_ID].credentialRegistry,
+    const { request } = await creditcoinClient.simulateContract({
+      account: wallet.account,
+      address: registry,
       abi: credentialRegistryAbi,
       functionName: "issue",
       args: [
@@ -79,13 +106,20 @@ export async function POST(request: NextRequest) {
         },
       ],
     });
+    const txHash = await wallet.writeContract(request);
 
-    const credentialId = await creditcoinClient.readContract({
-      address: ADDRESSES[CREDITCOIN_ID].credentialRegistry,
-      abi: credentialRegistryAbi,
-      functionName: "claimKeyFor",
-      args: [body.publicInputs, subject],
+    // Waiting is what makes the returned link work. Reporting success on the
+    // submitted hash sends the user to a page the chain has not written yet.
+    const receipt = await creditcoinClient.waitForTransactionReceipt({
+      hash: txHash,
+      timeout: 60_000,
     });
+    if (receipt.status !== "success") {
+      return NextResponse.json(
+        { error: "Your statement could not be written. Please try again.", txHash },
+        { status: 400 },
+      );
+    }
 
     return NextResponse.json({
       credentialId,

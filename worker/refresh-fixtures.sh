@@ -46,6 +46,11 @@ for pair in \
   fi
 done
 
+echo "==> browser witness"
+# The browser proves from these. They must track the bundles above, or the
+# statement is built over commitments the registry never attested.
+npx tsx src/index.ts export-witness
+
 echo "==> snapshot"
 npm run --silent snapshot >/dev/null
 cp out/income-snapshot.json ../fixtures/income-snapshot.json
@@ -90,3 +95,8 @@ PYEOF
 
 echo
 echo "Done. Commit fixtures/ and push so the frontend picks them up."
+echo
+echo "Private payers are withheld from fixtures/slips.json on purpose. To let the"
+echo "browser prove against them, set ORRU_SLIP_BOOKS in Vercel and .env.local to:"
+echo
+echo "  cd worker && npx tsx src/index.ts export-witness -- --private"
