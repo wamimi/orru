@@ -4,12 +4,12 @@ export type NavLink = {
   placeholder?: boolean;
 };
 
-/** Single source of truth for nav and footer. Swap the Docs href here only. */
+/** Marketing navigation. Every anchor exists on /preview. */
 export const navLinks: NavLink[] = [
-  { label: "For individuals", href: "#individuals" },
-  { label: "For lenders", href: "#lenders" },
-  { label: "Docs", href: "#", placeholder: true },
+  { label: "About", href: "#about" },
+  { label: "Services", href: "#services" },
+  { label: "How it works", href: "#how-it-works" },
+  { label: "FAQ", href: "#faq" },
 ];
 
-/** Repointed to the app flow in Phase 2. */
-export const primaryCta = { label: "Get started", href: "/connect" };
+export const primaryCta = { label: "Launch app", href: "/connect" };
