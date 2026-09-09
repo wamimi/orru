@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "generatedAt": "2026-09-08T09:35:06.753Z",
+  "note": "Preimages of the attested window each proof bundle was built over, so the browser can rebuild that bundle itself. Every book here has a salt equal to keccak256(abi.encode(payer, recipient, period)), which DemoPayroll derives on-chain and emits in PaymentMade beside the amount: nothing in this file is secret. A payer that salts randomly is private and is never written here — run `npm run export-witness -- --private` for those.",
+  "books": [
+    {
+      "payer": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "recipient": "0x722533cA456a2B845b10e808B0e13Ec5e4134f27",
+      "band": 1,
+      "slips": [
+        {
+          "amount": "850000000",
+          "period": "18",
+          "salt": "0x1e50d65d0b9a9ffdbbfb9a590716449e556a1d75d3e8d67892390e29a3194ada",
+          "commitment": "0x56b5409a32faf6f37e4f100e35188600ac44db1283a1f1a81ba543c6ab33d805"
+        },
+        {
+          "amount": "850000000",
+          "period": "19",
+          "salt": "0xf63e5080e0a6faeb4e3ebc006069d25f091950934ebae87a328006780aa3de3c",
+          "commitment": "0xbc53a898097440cb875a6597737c5b49bc48c9b8991b9590518a1f3bccbdd310"
+        },
+        {
+          "amount": "850000000",
+          "period": "20",
+          "salt": "0xd50cd1ab0af06aeeaa6a0eb099fc514ec099340c9a5f5ddc67c55e33e4e865f8",
+          "commitment": "0x6636752367b9cd3d70264b6f594fc0d1ecb9aca1f15d44ea30ca49bb6e9294f7"
+        }
+      ]
+    },
+    {
+      "payer": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "recipient": "0xBb605cf7604ef843e9Df15559257a73989DAe75A",
+      "band": 4,
+      "slips": [
+        {
+          "amount": "2500000000",
+          "period": "18",
+          "salt": "0xa30e9917d01edaf311e3d9a86ec06ef12b869a28ce9291d3a1b89ba749cdae69",
+          "commitment": "0x89c261f719cdd15835c1765f933705df7e2b4da629b1a9411e2038070ba3bb3c"
+        },
+        {
+          "amount": "2500000000",
+          "period": "19",
+          "salt": "0x4e025d85e65642a9d15c78d5e418c0a6928ff6537ff6b6cd4e41d30cb4152433",
+          "commitment": "0x8cfd57ec788b3c5db0e6ca3de9bc32ef2d777add9fba82fc5847119743f2b6f7"
+        },
+        {
+          "amount": "2500000000",
+          "period": "20",
+          "salt": "0x29d75f6145ebe138d2bcf974da6a624268364131db39d81bc51cd9b73dcf7eab",
+          "commitment": "0x35ff3e3f7205b158e6f273a1df42202dfc5733ee65f993b1f7901cc1990aea17"
+        }
+      ]
+    },
+    {
+      "payer": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "recipient": "0xe058c2056249287B429607814C9F21Ed48cE3B34",
+      "band": 5,
+      "slips": [
+        {
+          "amount": "4100000000",
+          "period": "18",
+          "salt": "0x36166d5b73d10e437e3f56397ba838277dfc4fe5c6d3c46c6cf196538125cca6",
+          "commitment": "0xd94f5944e93ba0c80fca6eaf70d8b2d4e434fe7819e57973853fc67a886fc06f"
+        },
+        {
+          "amount": "4100000000",
+          "period": "19",
+          "salt": "0x419c7e14c01237e4f2e37f1bef1f73f419fd9d6181ce40e7955fd71904607999",
+          "commitment": "0x3552becc57663e432a9e5493ff17cd17e2e072205d7b153a7758cf36029fc9d5"
+        },
+        {
+          "amount": "4100000000",
+          "period": "20",
+          "salt": "0xcd57883187c9b49b3d2203bb0af4f6cdc43d6105c4d1a7274fdc765bf3633dad",
+          "commitment": "0xa8dfd63da387ed3bee8a2434eaf14be14f642f18c9a5b14552e696fe1c513ba7"
+        }
+      ]
+    },
+    {
+      "payer": "0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d",
+      "recipient": "0xf6A48D18DA6072eaDdBF5D2BfB9FE9263dE0b66C",
+      "band": 4,
+      "slips": [
+        {
+          "amount": "2500000000",
+          "period": "18",
+          "salt": "0x372e3c03ac4135b3a2c893514b1e92941214e5529680273368ecd179fde34318",
+          "commitment": "0xd0f9fd25b38e19531319ae74bf7d0e20bb292ac6c4b29f5f36a315a3d5fcf991"
+        },
+        {
+          "amount": "2500000000",
+          "period": "19",
+          "salt": "0x21e6992b9d50800ddfcd573428ae23760c8ee14b0621db033c137a280a962ae6",
+          "commitment": "0x58221c3b0e542a8bbfbc3d7012746d02862557a46627e9060ddbcdcd0f72c3e8"
+        },
+        {
+          "amount": "2500000000",
+          "period": "20",
+          "salt": "0xfbc591cfe470dd60af1c8673079cc9d8d396b5c139d4c8a051d606b53c91e502",
+          "commitment": "0xfe5940b3c83f626d27b7216aa6de77b0dbae7a570348774dbed8df6af04b626f"
+        }
+      ]
+    }
+  ]
+}

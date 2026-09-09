@@ -1,5 +1,6 @@
 import { attest } from "./attest.js"
 import { config, ConfigError, LOADED_ENV_FILES } from "./config.js"
+import { exportWitness } from "./export-witness.js"
 import { log } from "./log.js"
 import { prove } from "./prove.js"
 import { scan, summarise } from "./scan.js"
@@ -21,6 +22,9 @@ const USAGE = `orru worker
         --payer 0x..       print the command to anchor their commitments
         --amount N
         [--from-period N] [--count N] [--name "Acme Ltd"]
+  export-witness           write fixtures/slips.json so the browser can rebuild
+        [--private]        each proof bundle itself; --private prints the books
+                           whose salts are secret, for ORRU_SLIP_BOOKS
   run [--submit]           scan then attest, once
 
 Options
@@ -115,6 +119,9 @@ async function main(): Promise<void> {
       process.stdout.write(`\nAnchor them with:\n\n${anchorCommand(book)}\n\n`)
       break
     }
+    case "export-witness":
+      exportWitness(flag("private"))
+      break
     case "run":
       await scan()
       await attest({ submit: flag("submit"), limit })

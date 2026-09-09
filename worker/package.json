@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test src/*.test.ts",
     "snapshot": "tsx src/index.ts snapshot",
-    "slips": "tsx src/index.ts slips"
+    "slips": "tsx src/index.ts slips",
+    "export-witness": "tsx src/index.ts export-witness"
   },
   "dependencies": {
     "@gluwa/usc-sdk": "0.18.0",
