@@ -124,40 +124,21 @@ export function toIncomeRecord(row: SnapshotRow): IncomeRecord {
   };
 }
 
-/**
- * One wallet can have several payers. Match exact address, then documented
- * prefixes so fixture rows still resolve when a live checksummed address is used.
- */
-const PREFIX_ALIASES = [
-  "0xf6a48d18",
-  "0xbb605cf7",
-  "0xe058c205",
-  "0x722533ca",
-] as const;
-
+/** Every payer that has paid this address. One wallet can have several. */
 export function incomesForAddress(address: string): IncomeRecord[] {
-  const snapshot = readIncomeSnapshot();
   const needle = address.toLowerCase();
-  const exact = snapshot.recipients.filter(
-    (row) => row.address.toLowerCase() === needle,
-  );
-  if (exact.length > 0) return exact.map(toIncomeRecord);
-
-  const alias = PREFIX_ALIASES.find((prefix) => needle.startsWith(prefix));
-  if (!alias) return [];
-  return snapshot.recipients
-    .filter((row) => row.address.toLowerCase().startsWith(alias))
+  return readIncomeSnapshot()
+    .recipients.filter((row) => row.address.toLowerCase() === needle)
     .map(toIncomeRecord);
 }
 
+/**
+ * Bundle filenames carry a short address prefix, so a match here is a candidate
+ * and not proof of ownership. The caller compares `subject` before using it.
+ */
 export function findProofBundlePath(address: string): string | null {
   const lower = address.toLowerCase();
   const prefix = lower.slice(2, 10);
-  const preferred = firstExisting(
-    join(process.cwd(), "fixtures", "proof-f6A48D18-payroll-band4.json"),
-    join(process.cwd(), "worker", "out", `proof-${address}-2.json`),
-  );
-  if (lower.startsWith("0xf6a48d18") && preferred) return preferred;
 
   for (const dir of DATA_DIRS) {
     if (!existsSync(dir)) continue;
@@ -175,17 +156,4 @@ export function findProofBundlePath(address: string): string | null {
     return join(dir, ranked[0]);
   }
   return null;
-}
-
-export function findSlipsPath(address: string): string | null {
-  const exact = join(process.cwd(), "worker", "out", `slips-${address}.json`);
-  if (existsSync(exact)) return exact;
-  const dir = join(process.cwd(), "worker", "out");
-  if (!existsSync(dir)) return null;
-  const lower = address.toLowerCase();
-  const match = readdirSync(dir).find((name) => {
-    if (!name.startsWith("slips-") || !name.endsWith(".json")) return false;
-    return name.toLowerCase().includes(lower);
-  });
-  return match ? join(dir, match) : null;
 }

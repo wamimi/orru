@@ -18,8 +18,6 @@ export type ReportPayload = {
   creditcoinTxs: `0x${string}`[];
 };
 
-const DEMO_SUBJECT = "0xf6A48D18DA6072eaDdBF5D2BfB9FE9263dE0b66C";
-
 function reasonsFromIncome(
   income: IncomeRecord | null,
   credential: VerifyPayload | null,
@@ -68,8 +66,11 @@ export async function buildReport(requestId: string): Promise<ReportPayload> {
     if (credential.status === "unknown") credential = unknownVerify(requestId);
   }
 
-  const subject = credential?.subjectAddress ?? DEMO_SUBJECT;
-  const incomes = snapshotAvailable() ? incomesForAddress(subject) : [];
+  // No credential means no subject, and therefore no income to report. Falling
+  // back to a known address here would render a report for someone else.
+  const subject = credential?.subjectAddress ?? null;
+  const incomes =
+    subject && snapshotAvailable() ? incomesForAddress(subject) : [];
   const income =
     incomes.find((row) => row.verified && row.provableWindow) ?? incomes[0] ?? null;
 
