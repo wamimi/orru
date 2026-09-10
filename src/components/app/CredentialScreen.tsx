@@ -159,7 +159,10 @@ export function CredentialScreen() {
             body={`Anyone can check ${truncateHex(issued.id)} without an account.`}
           >
             <div className="mt-5 flex flex-wrap gap-3">
-              <ButtonLink href={`/verify/${issued.id}`}>Open the public page</ButtonLink>
+              <ButtonLink href="/borrow">Borrow against it</ButtonLink>
+              <ButtonLink href={`/verify/${issued.id}`} variant="outline">
+                Open the public page
+              </ButtonLink>
               {issued.txHash ? (
                 <a
                   href={creditcoinTxUrl(issued.txHash)}
