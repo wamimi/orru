@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { ADDRESSES, SEPOLIA_ID } from "@/lib/chain";
 import type { PaymentSlip } from "@/lib/prove/types";
 
 /**
@@ -50,14 +51,38 @@ function fromFixtures(): SlipBook[] {
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 /**
- * The window for one recipient and payer. The environment wins, so a private
- * book always shadows anything committed for the same pair.
+ * The window for one recipient and payer. Stored books win; a payer whose salts
+ * are public is rebuilt from the chain instead.
  */
-export function slipBookFor(recipient: string, payer: string): SlipBook | null {
+export async function slipBookFor(
+  recipient: string,
+  payer: string,
+): Promise<SlipBook | null> {
   const books = [...fromEnvironment(), ...fromFixtures()];
-  return (
-    books.find((b) => same(b.recipient, recipient) && same(b.payer, payer)) ?? null
+  const stored = books.find(
+    (b) => same(b.recipient, recipient) && same(b.payer, payer),
   );
+  if (stored) return stored;
+
+  if (same(payer, ADDRESSES[SEPOLIA_ID].demoPayroll)) {
+    const { derivePayrollSlips } = await import("@/lib/payroll-slips");
+    return derivePayrollSlips(recipient);
+  }
+
+  const { faucetConfigured, faucetPayer, faucetSlips, faucetBand, faucetStatus } =
+    await import("@/lib/faucet");
+  if (faucetConfigured() && same(payer, faucetPayer())) {
+    const status = await faucetStatus(recipient);
+    if (!status.attested) return null;
+    return {
+      payer: faucetPayer(),
+      recipient: recipient as `0x${string}`,
+      band: faucetBand(),
+      slips: faucetSlips(recipient),
+    };
+  }
+
+  return null;
 }
 
 /** Every payer this recipient can prove against, for the picker on review. */
