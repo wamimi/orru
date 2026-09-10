@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isHex } from "viem";
-import { creditPoolAbi } from "@/lib/abi";
+import { credentialRegistryAbi, creditPoolAbi } from "@/lib/abi";
 import { ADDRESSES, CREDITCOIN_ID } from "@/lib/chain";
 import { creditcoinClient } from "@/lib/clients";
 import { friendlyError } from "@/lib/errors";
 import { relayerConfigured, relayerWallet } from "@/lib/relayer";
 import { requireSession } from "@/lib/session-api";
+import { forgetStatements } from "@/lib/statements";
 
 type Body = {
   credentialId?: `0x${string}`;
@@ -32,6 +33,20 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Stops one session spending another subject's headroom.
+    const record = await creditcoinClient.readContract({
+      address: ADDRESSES[CREDITCOIN_ID].credentialRegistry,
+      abi: credentialRegistryAbi,
+      functionName: "credentialOf",
+      args: [body.credentialId],
+    });
+    if (record.subject.toLowerCase() !== session.address) {
+      return NextResponse.json(
+        { error: "That statement belongs to a different account." },
+        { status: 403 },
+      );
+    }
+
     const remaining = await creditcoinClient.readContract({
       address: ADDRESSES[CREDITCOIN_ID].creditPool,
       abi: creditPoolAbi,
@@ -50,10 +65,45 @@ export async function POST(request: NextRequest) {
       args: [body.credentialId, amount],
     });
 
+    // A timeout leaves the transaction in flight; a retry would pay twice.
+    let receipt;
+    try {
+      receipt = await creditcoinClient.waitForTransactionReceipt({
+        hash: txHash,
+        timeout: 60_000,
+      });
+    } catch {
+      return NextResponse.json(
+        {
+          status: "pending",
+          credentialId: body.credentialId,
+          amount: amount.toString(),
+          txHash,
+        },
+        { status: 202 },
+      );
+    }
+
+    if (receipt.status !== "success") {
+      return NextResponse.json(
+        { error: "The payment could not be completed. Please try again.", txHash },
+        { status: 400 },
+      );
+    }
+
+    const left = await creditcoinClient.readContract({
+      address: ADDRESSES[CREDITCOIN_ID].creditPool,
+      abi: creditPoolAbi,
+      functionName: "remainingFor",
+      args: [body.credentialId],
+    });
+
+    forgetStatements(session.address);
+
     return NextResponse.json({
       credentialId: body.credentialId,
       amount: amount.toString(),
-      remaining: remaining.toString(),
+      remaining: left.toString(),
       txHash,
     });
   } catch (error) {

@@ -7,6 +7,7 @@ import { friendlyError } from "@/lib/errors";
 import { subjectFromPublicInputs } from "@/lib/issue";
 import { relayerConfigured, relayerWallet } from "@/lib/relayer";
 import { requireSession } from "@/lib/session-api";
+import { forgetStatements } from "@/lib/statements";
 
 type IssueBody = {
   proof?: Hex;
@@ -65,7 +66,6 @@ export async function POST(request: NextRequest) {
   const registry = ADDRESSES[CREDITCOIN_ID].credentialRegistry;
 
   try {
-    // Pure over the statement and the subject, so it is known before the write.
     const credentialId = await creditcoinClient.readContract({
       address: registry,
       abi: credentialRegistryAbi,
@@ -73,9 +73,7 @@ export async function POST(request: NextRequest) {
       args: [body.publicInputs, subject],
     });
 
-    // The registry refuses a second statement over the same pay cycles. Reading
-    // it here returns the id of the one that already exists, so the caller can
-    // show that statement instead of an error.
+    // A second statement over the same cycles is refused; return the existing id.
     const existing = await creditcoinClient.readContract({
       address: registry,
       abi: credentialRegistryAbi,
@@ -108,8 +106,6 @@ export async function POST(request: NextRequest) {
     });
     const txHash = await wallet.writeContract(request);
 
-    // Waiting is what makes the returned link work. Reporting success on the
-    // submitted hash sends the user to a page the chain has not written yet.
     const receipt = await creditcoinClient.waitForTransactionReceipt({
       hash: txHash,
       timeout: 60_000,
@@ -120,6 +116,8 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+
+    forgetStatements(subject);
 
     return NextResponse.json({
       credentialId,
