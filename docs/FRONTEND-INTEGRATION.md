@@ -1236,7 +1236,205 @@ constraint failure.
 
 ---
 
-## 11. Reference
+## 11. Deployment environment
+
+Everything the Next.js app reads from `process.env`, and what breaks without it.
+Add each to **Production and Preview** — a preview build missing one behaves
+differently from production and both of you waste an afternoon on it. Vercel only
+picks up changes on a new build, so **redeploy after adding any of these**.
+
+### Required
+
+| Variable | Purpose | Without it |
+|---|---|---|
+| `NEXT_PUBLIC_PRIVY_APP_ID` | Wallet connect and both signature prompts | No connect button; the flow cannot start |
+| `PRIVY_APP_SECRET` | Doubles as the session signing key if `SESSION_SECRET` is absent | Sign-in throws |
+| `SESSION_SECRET` | HMAC key for the session cookie and bearer token | Falls back to `PRIVY_APP_SECRET` |
+| `RELAYER_PRIVATE_KEY` | Pays for `issue` and `disburse` on Creditcoin | Issuing returns 503 |
+
+`SESSION_SECRET` should be its own value rather than reusing the Privy secret.
+Whoever holds that key can mint a valid session for **any** address without a
+signature — `readSession` only checks the HMAC. Separate keys mean a leak on one
+machine does not unlock production sessions.
+
+Generate one with `openssl rand -hex 32`.
+
+### Required for the demo paths
+
+| Variable | Purpose | Without it |
+|---|---|---|
+| `ORRU_SLIP_BOOKS` | Payment preimages for payers whose salts are secret — today only Semuni | The Semuni band-6 demo returns 404. Payroll income is unaffected |
+| `ORRU_FAUCET_SECRET` | Derives per-claim salts. Never stored anywhere | `/try` returns "The demo payer is not available right now" |
+| `ORRU_FAUCET_PAYER_KEY` | Signs the Sepolia anchor for a claim | Same as above |
+
+`ORRU_SLIP_BOOKS` is one JSON line, currently 863 characters. Regenerate with:
+
+```bash
+cd worker && npx tsx src/index.ts export-witness -- --private
+```
+
+It contains the only copy of Semuni's salts, which are the amounts the proof
+exists to hide. It must never be committed — `worker/slips/` is gitignored for
+the same reason. Share it privately, not in a PR or a channel.
+
+`ORRU_FAUCET_SECRET` can be any long random string. Generate one with:
+
+```bash
+openssl rand -hex 32
+```
+
+**Pick it once and never change it.** Claim salts derive from it, so changing it
+orphans every claim anyone has already made and their income silently
+disappears — the page will simply say a wallet has no payments, with no error to
+explain why.
+
+`ORRU_FAUCET_PAYER_KEY` is the key for the payer at
+`0x0531203274075Ff79A07000BBDa2B0272C647d01`, held locally in the Foundry
+keystore `orru-payer`. It must stay funded with Sepolia ETH or claims fail —
+the app names that failure explicitly rather than returning a generic error.
+
+### Optional
+
+| Variable | Default | Set it only if |
+|---|---|---|
+| `CREDITCOIN_RPC_URL` | the public testnet RPC | You have a better endpoint |
+| `ORRU_FAUCET_PAYER` | Semuni's address | The faucet payer changes |
+| `ORRU_COEP` | `credentialless` | A wallet connector breaks — see below |
+| `NEXT_PUBLIC_ORRU_PREBUILT` | unset | You need to fall back to pre-built statements |
+
+### Two that need care
+
+**`SEPOLIA_RPC_URL` — leave unset.** The Alchemy endpoint in `contracts/.env`
+serves reads and transactions but rejects `eth_getLogs`, which live income
+derivation depends on. Log queries fall back to a public node either way, so
+setting it does no harm, but there is nothing to gain.
+
+**`NEXT_PUBLIC_ORRU_PREBUILT=1` disables browser proving.** It serves the
+pre-built statement from `fixtures/` instead, which means the amounts pass
+through whoever generated that file. It exists as a demo-day escape hatch. Leave
+it unset unless local proving has actually failed in front of you.
+
+### Cross-origin isolation
+
+`next.config.ts` sets COOP and COEP so the prover can use every core. Without
+them bb.js silently drops to a single thread — same proof, several times slower,
+no error.
+
+`credentialless` is the default because `require-corp` blocks third-party frames.
+Verified working with Privy: MetaMask, Rainbow and WalletConnect all connect.
+Coinbase Smart Wallet's popup flow does **not** work, because it needs
+`window.opener` and COOP `same-origin` severs it. That is a genuine either/or —
+isolation requires `same-origin` exactly.
+
+Set `ORRU_COEP=off` to drop both headers if a connector has to work.
+
+### GitHub Actions secrets
+
+Separate from Vercel. `.github/workflows/attest-cron.yml` relays anchored
+commitments to Creditcoin; nothing is provable until it runs.
+
+`SEPOLIA_RPC_URL`, `CREDITCOIN_RPC_URL`, `ETHERSCAN_API_KEY`,
+`PAYER_ANCHOR_ADDRESS`, `DEMO_PAYROLL_ADDRESS`, `ATTESTATION_REGISTRY_ADDRESS`,
+`CREDENTIAL_REGISTRY_ADDRESS`, `WORKER_PRIVATE_KEY`, `WORKER_START_BLOCK`.
+
+`ETHERSCAN_API_KEY` is not optional here. The worker uses Etherscan when a key is
+present and falls back to `eth_getLogs` otherwise — which the Alchemy endpoint
+rejects.
+
+## 12. Two claims the copy gets wrong
+
+### The credential does not hide the employer
+
+`src/app/(marketing)/preview/page.tsx:84` lists **"Who your clients or employer
+are"** under *Never included*. That is not true.
+
+`evidencePayer` is a stored field on the `Credential` struct
+(`CredentialRegistry.sol:63`) and an indexed parameter of `CredentialIssued`
+(`:86`). Anyone can read the payer from `credentialOf(id)` or from the event
+logs, without permission. For Semuni, whose name appears on the page, a verifier
+therefore learns the employer.
+
+The app copy has it right — `src/lib/income-view.ts:88` says:
+
+> Who your clients or employer are **beyond the verified name**
+
+The marketing page needs the same qualifier, or that row removed. This is a copy
+fix. Hiding the payer would require a protocol change, because the registry has
+to know which payer's attestations a credential rests on.
+
+What *is* withheld, and the page may say so plainly: every exact amount. The
+credential carries a band and nothing finer.
+
+### The verification API is free and permissionless, not metered
+
+`GET /api/verify/[id]` and `GET /api/report/[id]` take no session — neither
+calls `requireSession`. Anyone can read a credential's status, band, period
+count and evidence date without an account and without our cooperation.
+
+**That is the product, not a gap.** A verification a lender can perform without
+asking us is a stronger claim than one they need a key for; it is the whole
+reason the credential lives on Creditcoin rather than in our database.
+
+There is no API-key layer, tenant identity, rate limiting or usage metering, and
+none is planned for this build. The only key handling in the repo is the
+waitlist's Resend key. Describe the endpoint as it is. Metering belongs in a
+roadmap section as how this becomes a business — never in the present tense.
+
+If a paid tier is ever added, it should sit *beside* the free read rather than
+in front of it: webhooks, batch lookups, retained history. The permissionless
+primitive is the moat and should stay unauthenticated.
+
+## 13. How the product makes money, and what the UI must say
+
+`docs/SPEC.md` §11 is the source. This section is what belongs on screen.
+
+### The shape
+
+| Line | Who pays | What they get |
+|---|---|---|
+| **Payer integration** | A payroll platform or payout rail | One line in their payout flow; every worker they pay can prove income anywhere |
+| **Underwriting** | Lenders | "How much can this person safely borrow?" — a limit, not a fact |
+| **Embedded credit** | Apps | Get-paid-early inside their product; origination fees |
+
+**Reading a credential is free and permissionless, and stays that way.** We
+charge the side that gains distribution, never the side that would otherwise
+have to trust us. A verification a lender can perform without asking us is the
+whole reason the credential lives on Creditcoin rather than in our database.
+
+Semuni in the demo *is* the business model. It pays off-chain and anchors only a
+commitment — that is a payer integration, working, today.
+
+### Copy for the landing page
+
+Drop this in wherever it fits the design. Do not paraphrase the third
+paragraph — it is the part that stops "free API" reading as "no business model".
+
+> **Free to check. Paid to issue.**
+>
+> Anyone can verify a statement against Creditcoin — no account, no key, no
+> permission from us. That is deliberate. A verification you have to ask us for
+> is worth less than one you don't.
+>
+> Orru earns from the other side. A payroll platform adds one line to its payout
+> flow, and every worker it pays can prove their income anywhere. Lenders pay
+> for an underwriting decision rather than a raw fact. Apps that embed
+> get-paid-early pay an origination fee.
+>
+> We are not the balance sheet. Capital comes from the payer's float, a
+> depositor pool, or a licensed credit partner.
+
+### What the UI must not claim
+
+- Do not present the verification API as metered, keyed, or rate-limited. It is
+  none of those. See §12.
+- Do not imply the credit pool is real capital. It is simulated, and the borrow
+  screen says so.
+- Do not claim the payer registry is automatic. `approvedPayer` is a manual
+  mapping the owner sets. The many-payees rule in `SPEC.md` §6 Tier 2 is a
+  roadmap item, not shipped. A judge who greps for it will find
+  `setPayerApproval` and nothing else.
+
+## 14. Reference
 
 - Product spec: `docs/SPEC.md` · Scope and screens: `docs/MVP.md`
 - Chain constraints: `docs/ATTESTCOIN.md`

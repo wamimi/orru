@@ -74,8 +74,16 @@ target/
 !.env.example
 cache_hardhat/
 
-# Agent tooling
+# Agent tooling. Impeccable ships a 14MB native engine per harness directory.
 .claude/skills/
+.claude/agents/
+.claude/hooks/
+.claude/launch.json
+.github/skills/
+.github/agents/
+.github/hooks/
+.agents/
+skills-lock.json
 
 # Audit skill output (pashov/skills)
 x-ray/
