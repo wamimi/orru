@@ -8,9 +8,9 @@ export default function AppLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <PrivyProviders>
-      <div className="flex min-h-dvh flex-col bg-canvas">
+      <div className="product-shell app-shell">
         <AppNav />
-        <main className="flex-1">{children}</main>
+        <main className="app-main">{children}</main>
       </div>
     </PrivyProviders>
   );

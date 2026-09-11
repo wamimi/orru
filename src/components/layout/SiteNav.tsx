@@ -33,7 +33,7 @@ export function SiteNav() {
     >
       <nav className="mkt-nav__inner" aria-label="Main navigation">
         <ul className="mkt-nav__links">
-          {navLinks.slice(0, 3).map((link) => (
+          {navLinks.map((link) => (
             <li key={link.label}>
               <Link href={link.href} className="mkt-nav__link">
                 {link.label}

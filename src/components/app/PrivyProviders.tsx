@@ -20,8 +20,8 @@ export function PrivyProviders({
       config={{
         loginMethods: ["wallet"],
         appearance: {
-          theme: "light",
-          accentColor: "#1F4A2C",
+          theme: "dark",
+          accentColor: "#C2D54E",
           walletChainType: "ethereum-only",
           showWalletLoginFirst: true,
         },

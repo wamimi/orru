@@ -1,7 +1,15 @@
 import type { Metadata } from "next";
-import { DM_Sans, JetBrains_Mono, Syne } from "next/font/google";
+import {
+  DM_Sans,
+  Geist,
+  Geist_Mono,
+  JetBrains_Mono,
+  Newsreader,
+  Syne,
+} from "next/font/google";
 import { IconProvider } from "@/components/IconProvider";
 import "./globals.css";
+import "./product.css";
 
 const syne = Syne({
   variable: "--font-syne",
@@ -19,6 +27,24 @@ const dmSans = DM_Sans({
 
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const productSans = Geist({
+  variable: "--font-product-sans",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const productMono = Geist_Mono({
+  variable: "--font-product-mono",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const productDisplay = Newsreader({
+  variable: "--font-product-display",
   subsets: ["latin"],
   display: "swap",
 });
@@ -52,7 +78,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${syne.variable} ${dmSans.variable} ${jetbrainsMono.variable} h-full`}
+      className={`${syne.variable} ${dmSans.variable} ${jetbrainsMono.variable} ${productSans.variable} ${productMono.variable} ${productDisplay.variable} h-full`}
     >
       <body className="min-h-full antialiased">
         <IconProvider>{children}</IconProvider>

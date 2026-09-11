@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 const KEY = "orru.flow";
+const EVENT = "orru:flow-session";
 
 import type { IncomeLookup } from "@/lib/income-types";
 
@@ -42,13 +43,24 @@ export function useFlowSession() {
       }
       setReady(true);
     });
-    return () => cancelAnimationFrame(frame);
+    const onSession = (event: Event) => {
+      const detail = (event as CustomEvent<FlowSession>).detail;
+      if (detail) setSession(detail);
+    };
+    window.addEventListener(EVENT, onSession);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener(EVENT, onSession);
+    };
   }, []);
 
   const update = useCallback((partial: Partial<FlowSession>) => {
     setSession((current) => {
       const next = { ...current, ...partial };
       sessionStorage.setItem(KEY, JSON.stringify(next));
+      queueMicrotask(() => {
+        window.dispatchEvent(new CustomEvent(EVENT, { detail: next }));
+      });
       return next;
     });
   }, []);
@@ -56,6 +68,7 @@ export function useFlowSession() {
   const clear = useCallback(() => {
     sessionStorage.removeItem(KEY);
     setSession(empty);
+    window.dispatchEvent(new CustomEvent(EVENT, { detail: empty }));
   }, []);
 
   return { session, ready, update, clear };

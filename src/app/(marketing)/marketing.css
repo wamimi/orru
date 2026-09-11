@@ -1,5 +1,5 @@
 .marketing-shell {
-  --mkt-bg: #060606;
+  --mkt-bg: #080808;
   --mkt-panel: #121212;
   --mkt-panel-raised: #1e1e1e;
   --mkt-white: #ffffff;
@@ -19,16 +19,35 @@
   font-family: var(--font-mkt-sans), sans-serif;
 }
 
-.marketing-shell::before {
-  position: fixed;
+/* Grain sits behind UI — cards, buttons, and panels stay clean */
+.marketing-shell::before,
+.marketing-shell::after {
+  position: absolute;
   inset: 0;
-  z-index: 80;
+  z-index: 0;
   content: "";
   pointer-events: none;
-  background-image: url("/textures/noise.svg");
-  background-size: 210px 210px;
-  opacity: 0.095;
-  mix-blend-mode: screen;
+}
+
+.marketing-shell::before {
+  background-image: url("/textures/grain.png");
+  background-repeat: repeat;
+  background-size: 160px 160px;
+  opacity: 0.55;
+  mix-blend-mode: overlay;
+}
+
+.marketing-shell::after {
+  background-image: url("/textures/grain.png");
+  background-repeat: repeat;
+  background-size: 72px 72px;
+  opacity: 0.35;
+  mix-blend-mode: soft-light;
+}
+
+.marketing-shell > * {
+  position: relative;
+  z-index: 1;
 }
 
 .marketing-shell ::selection {

@@ -39,16 +39,18 @@ export function CheckForm() {
           placeholder="orru:cred:7b6a24eb"
           autoComplete="off"
           spellCheck={false}
+          aria-invalid={Boolean(error)}
+          aria-describedby="statement-id-help"
           className="min-h-11 flex-1 rounded-control border border-rule bg-paper px-4 text-[0.9375rem] text-ink outline-none transition-tone placeholder:text-ink-faint focus:border-brand"
         />
         <Button type="submit">Check this statement</Button>
       </div>
       {error ? (
-        <p className="mt-3 text-sm text-[color:var(--ev-failed-fg)]" role="alert">
+        <p id="statement-id-help" className="mt-3 text-sm text-[color:var(--ev-failed-fg)]" role="alert">
           {error}
         </p>
       ) : (
-        <p className="mt-3 text-sm text-ink-faint">
+        <p id="statement-id-help" className="mt-3 text-sm text-ink-faint">
           Anyone can check. No account. Exact pay is not on the next page.
         </p>
       )}

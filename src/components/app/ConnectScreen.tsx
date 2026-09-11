@@ -307,10 +307,10 @@ export function ConnectScreen() {
           <Button
             onClick={() => {
               const query = requestId ? `?request=${requestId}` : "";
-              router.push(`/review${query}`);
+              router.push(`/app${query}`);
             }}
           >
-            Continue
+            Open workspace
             <ArrowRight size={18} />
           </Button>
         ) : (

@@ -14,27 +14,21 @@ export function ScreenFrame({
   children: ReactNode;
 }) {
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-10 md:px-10 md:py-14">
-      <div
-        className={
-          aside
-            ? "grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] lg:gap-x-16"
-            : undefined
-        }
-      >
-        <header>
-          <p className="eyebrow text-brand">{kicker}</p>
-          <h1 className="display-lg mt-4 max-w-xl text-ink">{title}</h1>
+    <div className="product-screen">
+      <div className={`product-screen__grid ${aside ? "has-aside" : ""}`}>
+        <header className="product-screen__header">
+          <p className="product-screen__kicker">{kicker}</p>
+          <h1 className="product-title">{title}</h1>
           {lede ? (
-            <p className="mt-4 max-w-xl text-[0.9375rem] leading-relaxed text-ink-soft md:text-base">
+            <p className="product-screen__lede">
               {lede}
             </p>
           ) : null}
         </header>
         {aside ? (
-          <aside className="lg:sticky lg:top-24 lg:row-span-2">{aside}</aside>
+          <aside className="product-screen__aside">{aside}</aside>
         ) : null}
-        <div className={aside ? "lg:col-start-1" : "mt-10"}>{children}</div>
+        <div className="product-screen__content">{children}</div>
       </div>
     </div>
   );

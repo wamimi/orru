@@ -28,7 +28,7 @@ export type StageItem = {
 
 export function StageList({ stages }: { stages: StageItem[] }) {
   return (
-    <ol>
+    <ol className="product-stage-list">
       {stages.map((stage, index) => {
         const last = index === stages.length - 1;
         return (
@@ -54,7 +54,7 @@ export function StageList({ stages }: { stages: StageItem[] }) {
 
 export function StageAside({ children }: { children: ReactNode }) {
   return (
-    <div className="border-t-2 border-rule-strong pt-6 md:pt-8">
+    <div className="product-aside-card border-t-2 border-rule-strong pt-6 md:pt-8">
       {children}
     </div>
   );
