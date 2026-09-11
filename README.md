@@ -2,6 +2,47 @@
 
 Private proof of crypto income — and credit against it.
 
+## What this is
+
+Orru turns stablecoin payments into a verifiable income credential. A worker
+proves they were paid inside an income band across three consecutive pay
+cycles — without revealing any amount — and a lender can check that claim with
+no account, no cooperation from us, and no reason to trust us.
+
+> Etherscan finds it. Attestcoin proves it. Creditcoin never takes anyone's word.
+
+The proof is generated in the user's own browser, verified on-chain by
+Creditcoin's native query verifier, and the resulting credential is public.
+
+## How this makes money
+
+Three lines, none of which charge the person checking a credential.
+
+**1. Payer integration — the business.** A payroll platform or payout rail adds
+one line to its flow to anchor a commitment per payment. Its workers can then
+prove income anywhere. This is the paid relationship and the one that scales:
+the payer gains a retention feature, and every worker they pay becomes a user.
+Semuni in the demo is exactly this — it pays off-chain and anchors only a hash.
+
+**2. Underwriting.** "How much can this person safely borrow?" Subscription or
+per-decision, sold to lenders who want a limit rather than a fact.
+
+**3. Embedded credit.** Get-paid-early inside someone else's app. Origination
+fees.
+
+**Reading a credential stays free and permissionless, permanently.** That is not
+a missing paywall — it is what makes a credential worth issuing. A verification a
+lender can perform without asking us is a stronger product than one they need a
+key for, and it is the whole reason the credential lives on Creditcoin rather
+than in our database. We charge the side that gains distribution, never the side
+that would otherwise have to trust us.
+
+**We are not the balance sheet.** The demo credit pool is simulated capital.
+Real liquidity comes from the payer's own float, a depositor pool, or a licensed
+credit partner.
+
+Full detail in `docs/SPEC.md` §11.
+
 ## Local
 
 ```bash

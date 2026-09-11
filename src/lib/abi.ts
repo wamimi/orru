@@ -12,9 +12,8 @@ export const credentialRegistryAbi = parseAbi([
   "function revoke(bytes32 credentialId)",
   "event CredentialIssued(bytes32 indexed credentialId, address indexed subject, address indexed evidencePayer, uint8 band, uint64 evidenceEndHeight, bytes32 documentHash)",
   "event CredentialRevoked(bytes32 indexed credentialId, address indexed revokedBy)",
-  // Parameter types are part of a custom error's selector, so these must match
-  // the contract exactly or a revert arrives undecodable and reads as a generic
-  // failure. Verifier errors are included because they surface through issue().
+  // Parameter types are part of a custom error's selector: these must match the
+  // contract exactly. Verifier errors surface through issue().
   "error ZeroAddress()",
   "error WrongPublicInputCount(uint256 given, uint256 expected)",
   "error NonCanonicalPublicInput(uint256 index)",
@@ -48,6 +47,21 @@ export const creditPoolAbi = parseAbi([
   "error ExceedsLimit(uint256 requested, uint256 remaining)",
   "error InsufficientLiquidity(uint256 requested, uint256 available)",
   "error EvidenceTooOld(uint64 given, uint64 minimum)",
+]);
+
+export const demoPayrollAbi = parseAbi([
+  "function amountOf(address recipient) view returns (uint256)",
+  "function lastPaidPeriod() view returns (uint256)",
+  "function saltFor(address recipient, uint256 period) view returns (bytes32)",
+]);
+
+export const payerAnchorAbi = parseAbi([
+  "function anchoredBy(address payer, bytes32 commitment) view returns (bool)",
+  "function anchorBatch(bytes32[] commitments)",
+  "error AlreadyAnchored(address payer, bytes32 commitment)",
+  "error EmptyCommitment()",
+  "error EmptyBatch()",
+  "error BatchTooLarge(uint256 length, uint256 max)",
 ]);
 
 export const attestationRegistryAbi = parseAbi([

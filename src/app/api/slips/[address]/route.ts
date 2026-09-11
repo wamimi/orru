@@ -29,7 +29,7 @@ export async function GET(
   const session = requireSession(request, address);
   if (session instanceof NextResponse) return session;
 
-  const book = slipBookFor(address, payer);
+  const book = await slipBookFor(address, payer);
   if (!book) {
     return NextResponse.json(
       { error: "This employer's payment records are not ready yet." },
