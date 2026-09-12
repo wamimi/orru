@@ -6,7 +6,7 @@ import { ScreenFrame } from "@/components/app/ScreenFrame";
 export const metadata: Metadata = {
   title: "Check a statement",
   description:
-    "Paste an Orru statement id. Anyone can open it. It shows a range — never an exact amount.",
+    "Paste an Orru statement id. Anyone can open it. It shows a range, never an exact amount.",
 };
 
 const DISCLOSURE =
@@ -18,7 +18,7 @@ export default function CheckPage() {
       <ScreenFrame
         kicker="Public check"
         title="Check a statement."
-        lede="Paste the short id or the long 0x id. You will see a range and a dated window — never an exact amount."
+        lede="Paste the short id or the long 0x id. You will see a range and a dated window, never an exact amount."
       >
         <CheckForm />
         <div className="mt-16 max-w-xl border-t-2 border-rule-strong pt-6">

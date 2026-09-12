@@ -50,7 +50,7 @@ export function credentialIdForAlias(token: string): `0x${string}` | null {
 
 /**
  * Turn a pasted or URL id into the on-chain bytes32, or null if it cannot
- * be resolved. Unknown short ids stay unknown — they are not guessed.
+ * be resolved. Unknown short ids stay unknown; they are not guessed.
  */
 export function resolveCredentialId(raw: string): `0x${string}` | null {
   const parsed = parseStatementRef(raw);

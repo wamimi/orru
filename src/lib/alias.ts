@@ -23,7 +23,7 @@ export function isCredentialId(value: string): value is `0x${string}` {
 
 /**
  * Accepts a full hex id, `orru:cred:` plus eight hex chars, or the eight
- * chars alone. Anything else is invalid — do not guess.
+ * chars alone. Anything else is invalid; do not guess.
  */
 export function parseStatementRef(raw: string): ParsedStatementRef {
   const value = decodeRef(raw).trim().toLowerCase();

@@ -55,7 +55,7 @@ export function ConsentScreen() {
         <Callout
           tone="error"
           title="The share window has ended"
-          body="Ask the requester to send a new link. Your credential is unchanged — only this window closed."
+          body="Ask the requester to send a new link. Your credential is unchanged. Only this window closed."
           actionLabel="Back to your profile"
           actionHref="/profile"
         />
@@ -107,7 +107,7 @@ export function ConsentScreen() {
 
       <p className="mt-10 max-w-xl text-sm leading-relaxed text-ink-faint">
         You can stop sharing later. Stopping does not delete the statement.
-        Exact pay never goes into your statement — only a range.
+        Exact pay never goes into your statement, only a range.
       </p>
 
       {shareError ? (

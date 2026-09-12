@@ -5,7 +5,7 @@ const COPY: Record<string, string | ((args?: readonly unknown[]) => string)> = {
   CommitmentNotAttestedToPayer:
     "We're still confirming your payments. Try again in a few minutes.",
   InvalidSubjectAuthorization: "That signature didn't match this wallet.",
-  AuthorizationExpired: "That took too long — let's try again.",
+  AuthorizationExpired: "That took too long. Let's try again.",
   CredentialExists: "You already have a statement for these pay cycles.",
   InvalidProof: "Something went wrong checking your income.",
   SumcheckFailed: "Something went wrong checking your income.",

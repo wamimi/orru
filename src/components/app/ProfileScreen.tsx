@@ -219,7 +219,7 @@ export function ProfileScreen() {
     <ScreenFrame
       kicker="03 · Profile"
       title="Your income, as a range."
-      lede="Exact pay never goes into your statement — only a range."
+      lede="Exact pay never goes into your statement, only a range."
       aside={<CredentialCard data={card} />}
     >
       {session.incomes.length > 1 ? (
@@ -257,7 +257,7 @@ export function ProfileScreen() {
         <li className="border-t border-rule py-4">
           <p className="display-sm text-ink">A range, not a number</p>
           <p className="mt-1 text-sm leading-relaxed text-ink-soft">
-            Exact pay never goes into your statement — only a range.
+            Exact pay never goes into your statement, only a range.
           </p>
         </li>
         <li className="border-t border-rule py-4">

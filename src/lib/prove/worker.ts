@@ -55,7 +55,7 @@ self.onmessage = async (event: MessageEvent<Request>) => {
     const { witness } = await noir.execute(toNoirInputs(event.data.input) as never)
 
     post({ id, progress: "proving" })
-    // 'evm' is the keccak transcript with ZK — the same setting the verification
+    // 'evm' is the keccak transcript with ZK, the same setting the verification
     // key and the deployed Solidity verifier were generated with. Any other
     // target produces a proof that fails on-chain for no visible reason.
     const backend = new UltraHonkBackend(circuit.bytecode, await api())

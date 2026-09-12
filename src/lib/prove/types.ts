@@ -4,7 +4,7 @@ export const PUBLIC_INPUTS = 2 + PERIODS * 2
 
 /**
  * One pay cycle, as the payer recorded it. These are the circuit's PRIVATE
- * witness — they are what the proof exists to keep off the chain and out of any
+ * witness; they are what the proof exists to keep off the chain and out of any
  * server. They must reach the browser and go no further.
  */
 export interface PaymentSlip {

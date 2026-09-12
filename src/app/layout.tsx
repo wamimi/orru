@@ -52,8 +52,8 @@ const productDisplay = Newsreader({
 export const metadata: Metadata = {
   metadataBase: new URL("https://orru.xyz"),
   title: {
-    default: "orru — use your on-chain income as a credential",
-    template: "%s — Orru",
+    default: "Orru: proof of income from stablecoin pay",
+    template: "%s | Orru",
   },
   description:
     "Orru turns stablecoin payments into a private income credential. Share a band with a fintech, a neobank, or anywhere proof of income is required.",

@@ -6,7 +6,7 @@ import { slipBookFor } from "@/lib/slips";
 /**
  * Delivers one window's payment preimages to the recipient who owns them.
  *
- * The response body is the private witness — the amounts and the salts. It
+ * The response body is the private witness: the amounts and the salts. It
  * leaves the server exactly once, to the connected wallet, and goes no further:
  * never logged, never cached, never sent to a third party. The browser proves
  * from it locally and the server never sees the result until it is a proof.
