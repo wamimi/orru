@@ -1,0 +1,124 @@
+---
+title: "Verification API"
+description: "One public endpoint. No key, no account, no rate limit."
+---
+
+<Info>
+**Public and unauthenticated, on purpose.** Anyone can verify any statement.
+There is nothing to sign up for and no key to rotate.
+</Info>
+
+## Endpoint
+
+<ParamField path="credentialId" type="string" required>
+  `0x` followed by 64 hex characters. Anything else returns `status: "unknown"`.
+</ParamField>
+
+```bash
+curl https://orru.xyz/api/verify/0x7b6a24eb96a3eaf45f9dd61e5fcf9716ca4ad52a80a1ee09b93518ba150bf026
+```
+
+## Response
+
+```json
+{
+  "credentialId": "0x7b6a24eb96a3eaf45f9dd61e5fcf9716ca4ad52a80a1ee09b93518ba150bf026",
+  "status": "valid",
+  "issuedAt": "2026-09-06T20:10:45Z",
+  "revokedAt": null,
+  "subjectAddress": "0xf6A48D18DA6072eaDdBF5D2BfB9FE9263dE0b66C",
+  "walletBindingProven": true,
+  "incomeBand": { "id": 4, "label": "$2,500 - $4,000" },
+  "periodsProven": 3,
+  "verificationPeriod": { "from": "2026-09-05", "to": "2026-09-06" },
+  "attestcoinVerifiedFacts": ["payments_occurred", "payer_identity"],
+  "documentHash": null,
+  "evidenceEndHeight": 11646342,
+  "evidenceEndDate": "2026-09-06T09:19:00Z",
+  "issuanceTx": "0x…",
+  "revocationTx": null
+}
+```
+
+## Fields
+
+<ResponseField name="status" type='"valid" | "revoked" | "unknown"' required>
+  The only field that decides whether to proceed. A revoked statement still
+  returns a full record — read this, not the presence of data.
+</ResponseField>
+
+<ResponseField name="incomeBand" type="object | null">
+  `{ id, label }`. The range the holder proved every payment fell inside.
+  **Never an exact amount** — we do not hold one.
+</ResponseField>
+
+<ResponseField name="periodsProven" type="number">
+  How many consecutive pay cycles the proof covers. Three today.
+</ResponseField>
+
+<ResponseField name="evidenceEndDate" type="string | null">
+  The date of the most recent payment proven. **This is the field your freshness
+  policy applies to.** Resolved from the Ethereum block in `evidenceEndHeight`.
+</ResponseField>
+
+<ResponseField name="evidenceEndHeight" type="number | null">
+  The Ethereum block containing the newest payment. The authoritative value —
+  `evidenceEndDate` is derived from it for convenience.
+</ResponseField>
+
+<ResponseField name="subjectAddress" type="string | null">
+  The wallet the statement belongs to. Proven by signature at issuance, which is
+  what `walletBindingProven` reports.
+</ResponseField>
+
+<ResponseField name="attestcoinVerifiedFacts" type="string[]">
+  What Attestcoin authenticated, as opposed to what anyone asserted.
+  `payments_occurred` and `payer_identity` today.
+</ResponseField>
+
+<ResponseField name="documentHash" type="string | null">
+  Optional hash of a supporting document supplied at issuance. Null when none
+  was given. We never hold the document itself.
+</ResponseField>
+
+## A complete check
+
+```js
+async function check(credentialId, { maxAgeDays = 30, minBand = 0 } = {}) {
+  const res = await fetch(`https://orru.xyz/api/verify/${credentialId}`);
+  const s = await res.json();
+
+  // Always first. A revoked statement returns a full, healthy-looking record.
+  if (s.status !== "valid") {
+    return { ok: false, reason: s.status };
+  }
+
+  const ageDays = (Date.now() - Date.parse(s.evidenceEndDate)) / 86_400_000;
+  if (ageDays > maxAgeDays) {
+    return { ok: false, reason: "evidence_too_old", ageDays };
+  }
+
+  if (s.incomeBand.id < minBand) {
+    return { ok: false, reason: "band_below_policy", band: s.incomeBand };
+  }
+
+  return { ok: true, band: s.incomeBand, periods: s.periodsProven };
+}
+```
+
+<Note>
+Rejecting for age is not the same as the statement being false. It attested a
+real window; that window is simply older than your policy accepts. Say that in
+your UI, or your users will think the statement is fake.
+</Note>
+
+## Errors
+
+There aren't any, in the usual sense. An id that was never issued returns `200`
+with `status: "unknown"` rather than a `404`, so you handle one shape.
+
+## Rate limits and keys
+
+None today. Metering and keys are how this becomes a business, and they aren't
+built — see [the roadmap](/verify/roadmap). If you plan to depend on it at
+volume, read the contract directly instead, which nobody can rate-limit.

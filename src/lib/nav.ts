@@ -4,7 +4,7 @@ export type NavLink = {
   placeholder?: boolean;
 };
 
-/** Marketing navigation. Every anchor exists on /preview. */
+/** Marketing navigation. Every anchor exists on the landing page. */
 export const navLinks: NavLink[] = [
   { label: "About", href: "#about" },
   { label: "Services", href: "#services" },

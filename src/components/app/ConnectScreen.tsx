@@ -41,7 +41,7 @@ export function ConnectScreen() {
           title="A wallet is required"
           body="Orru reads the connected address and asks for a free signature. It never receives permission to move funds."
           actionLabel="Back to the website"
-          actionHref="/preview"
+          actionHref="/"
         />
       </ScreenFrame>
     );

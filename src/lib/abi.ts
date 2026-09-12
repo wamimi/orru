@@ -12,13 +12,26 @@ export const credentialRegistryAbi = parseAbi([
   "function revoke(bytes32 credentialId)",
   "event CredentialIssued(bytes32 indexed credentialId, address indexed subject, address indexed evidencePayer, uint8 band, uint64 evidenceEndHeight, bytes32 documentHash)",
   "event CredentialRevoked(bytes32 indexed credentialId, address indexed revokedBy)",
-  "error CommitmentNotAttestedToPayer()",
-  "error InvalidSubjectAuthorization()",
-  "error AuthorizationExpired()",
-  "error CredentialExists()",
+  // Parameter types are part of a custom error's selector: these must match the
+  // contract exactly. Verifier errors surface through issue().
+  "error ZeroAddress()",
+  "error WrongPublicInputCount(uint256 given, uint256 expected)",
+  "error NonCanonicalPublicInput(uint256 index)",
+  "error InvalidSubjectEncoding()",
+  "error InvalidCommitmentLimb(uint256 index)",
+  "error UnknownBand(uint256 band)",
+  "error CommitmentNotAttestedToPayer(bytes32 commitment, address payer)",
   "error InvalidProof()",
-  "error WrongPublicInputCount()",
-  "error CredentialNotValid()",
+  "error CredentialExists(bytes32 credentialId)",
+  "error NoSuchCredential(bytes32 credentialId)",
+  "error AlreadyRevoked(bytes32 credentialId)",
+  "error NotOwnerOrSubject(address caller)",
+  "error AuthorizationExpired(uint256 deadline)",
+  "error InvalidSubjectAuthorization(address subject)",
+  "error ProofLengthWrong()",
+  "error PublicInputsLengthWrong()",
+  "error SumcheckFailed()",
+  "error ShpleminiFailed()",
 ]);
 
 export const creditPoolAbi = parseAbi([
@@ -28,10 +41,27 @@ export const creditPoolAbi = parseAbi([
   "function minimumEvidenceHeight() view returns (uint64)",
   "function disburse(bytes32 credentialId, uint256 amount)",
   "event Disbursed(bytes32 indexed credentialId, address indexed subject, uint256 amount, uint256 remaining)",
+  "error ZeroAmount()",
+  "error CredentialNotValid(bytes32 credentialId)",
+  "error UnknownBand(uint8 band)",
   "error ExceedsLimit(uint256 requested, uint256 remaining)",
+  "error InsufficientLiquidity(uint256 requested, uint256 available)",
   "error EvidenceTooOld(uint64 given, uint64 minimum)",
-  "error InsufficientLiquidity()",
-  "error CredentialNotValid()",
+]);
+
+export const demoPayrollAbi = parseAbi([
+  "function amountOf(address recipient) view returns (uint256)",
+  "function lastPaidPeriod() view returns (uint256)",
+  "function saltFor(address recipient, uint256 period) view returns (bytes32)",
+]);
+
+export const payerAnchorAbi = parseAbi([
+  "function anchoredBy(address payer, bytes32 commitment) view returns (bool)",
+  "function anchorBatch(bytes32[] commitments)",
+  "error AlreadyAnchored(address payer, bytes32 commitment)",
+  "error EmptyCommitment()",
+  "error EmptyBatch()",
+  "error BatchTooLarge(uint256 length, uint256 max)",
 ]);
 
 export const attestationRegistryAbi = parseAbi([

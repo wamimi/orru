@@ -1,0 +1,32 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Orru",
+  "description": "Trustless onchain income verification and credit.",
+  "colors": { "primary": "#0D6862", "light": "#4FBDB2", "dark": "#0A524D" },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Start here",
+            "pages": ["index"]
+          },
+          {
+            "group": "Verifying a statement",
+            "pages": ["verify/overview", "verify/api", "verify/on-chain"]
+          },
+          {
+            "group": "For payers",
+            "pages": ["payers/overview", "payers/anchoring", "payers/example"]
+          }
+        ]
+      }
+    ]
+  },
+  "footer": {
+    "socials": { "github": "https://github.com/wamimi/orru" }
+  }
+}

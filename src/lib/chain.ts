@@ -10,7 +10,9 @@ export const ADDRESSES = {
     credentialRegistry: creditcoinDeployments.CredentialRegistry as `0x${string}`,
     attestationRegistry: creditcoinDeployments.AttestationRegistry as `0x${string}`,
     creditPool: creditcoinDeployments.DemoCreditPool as `0x${string}`,
-    settlementToken: creditcoinDeployments.mUSDC as `0x${string}`,
+      // Keyed MockUSDC because that is what deploy-creditcoin.sh writes.
+      // A second alias for the same address would go stale on redeploy.
+      settlementToken: creditcoinDeployments.MockUSDC as `0x${string}`,
     verifier: creditcoinDeployments.IncomeVerifier as `0x${string}`,
     nullifierRegistry: creditcoinDeployments.NullifierRegistry as `0x${string}`,
   },

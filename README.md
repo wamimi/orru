@@ -95,12 +95,83 @@ flowchart LR
    not pay transaction fees.
 6. Anyone with the statement ID can check its status and dated income range.
 
+## How Attestcoin, Creditcoin and zero-knowledge proofs are used
+
+Stated plainly, because each one does a specific job and none of them is
+decorative.
+
+### Attestcoin — proves the payment happened
+
+Attestcoin authenticates Ethereum transactions on Creditcoin. Our worker fetches
+a proof bundle for the anchoring transaction from the Attestcoin prover service
+and submits it to `AttestationRegistry`, which calls the **native query verifier
+precompile at `0x0000000000000000000000000000000000000FD2`**. The precompile
+checks the transaction against attested Ethereum history and returns the
+authenticated receipt.
+
+Two things the precompile does *not* do, which our contract does on top:
+
+- **It proves inclusion, not success.** A reverted transaction is still
+  included. `AttestationRegistry` checks the receipt status itself.
+- **It proves the event exists, not who emitted it.** The contract additionally
+  requires `log.address == TRUSTED_ANCHOR` and that the payer in `topics[1]` is
+  approved. Without this, anyone could emit a lookalike event, get a genuine
+  proof for it, and be accepted.
+
+Source-chain keys are not EVM chain ids: Ethereum Sepolia is key `1`, mainnet is
+key `3`.
+
+### Zero-knowledge — proves the income band without the amount
+
+A Noir circuit takes the three payments' amounts, periods and salts as **private
+witness**, recomputes each `keccak256(abi.encode(recipient, amount, period,
+salt))` commitment, and proves that every amount falls inside one of ten income
+bands and the periods are consecutive. The **public inputs** are the recipient,
+the band, and the three commitments — nothing else.
+
+Proving runs in the user's browser with bb.js in a Web Worker. The amounts never
+leave the machine. A Barretenberg-generated UltraHonk verifier on Creditcoin
+checks the proof on-chain.
+
+### Creditcoin — where the statement lives and where money moves
+
+`CredentialRegistry` on Creditcoin issues a statement only when three things hold
+at once: every commitment in the proof's public inputs was accepted by
+`AttestationRegistry` for the named payer, the zero-knowledge proof verifies
+against those exact same commitments, and the subject signed an EIP-712
+authorization. That last check is what stops someone issuing a statement for an
+address they don't control.
+
+`DemoCreditPool` then releases funds against a valid statement. Reads are
+permissionless — anyone can verify a statement with two contract calls and no
+account.
+
+## What is real and what is simulated
+
+Every proof, attestation and contract call is real and on public testnets. The
+following are demo stand-ins, and are labelled as such wherever a user sees them.
+
+| Thing | Status | Why |
+|---|---|---|
+| **Payments** | Simulated | `DemoPayroll` on Sepolia pays demo workers in **dUSD**, a test token we deployed, once an hour. Circle's testnet faucet gives ~10 USDC per claim, which cannot demonstrate income bands. The transfers are still real ERC-20 transfers in real blocks, and Attestcoin authenticates them identically. |
+| **The private payer** | Simulated | **Semuni** is a payer address we control that anchors commitments for off-chain payments. It demonstrates the production model: pay by any rail, anchor only a hash. The salaries it anchors are demo figures. |
+| **The credit pool** | Simulated | `DemoCreditPool` holds **mUSDC**, a test token, and lends 30% of the band floor. No repayment, no interest, no collections. It exists so an approved decision moves real value on-chain. |
+| **The demo faucet** | Simulated | `/try` lets any wallet claim a three-period income history: a payer we control anchors three commitments for that address. This exists so a judge can complete the flow without being on a payroll. |
+| **Attestation** | **Real** | Every commitment is authenticated by Creditcoin's precompile against attested Ethereum history. |
+| **Proofs** | **Real** | Generated in the browser, verified on-chain by the deployed UltraHonk verifier. |
+| **Statements and payouts** | **Real** | On Creditcoin, readable by anyone, moved by the pool contract. |
+
+The point: what is simulated is the *economics* — who pays whom, and with what.
+What is real is the *verification* — that a payment happened, that a band was
+proven, and that a statement was issued against it without anyone taking anyone's
+word.
+
 ## Product surfaces
 
 | Surface | Route | Purpose |
 |---|---|---|
-| Waitlist | `/` | Current public production entry point |
-| Marketing | `/preview` | Product overview and use cases |
+| Landing | `/` | Product overview and use cases |
+| Waitlist | `/waitlist` | Email signup |
 | Workspace | `/app` | Statement workflow dashboard |
 | Connect | `/connect` | Connect and verify the payout account |
 | Review | `/review` | Review confirmed periods and payer evidence |
@@ -170,13 +241,6 @@ orru/
 └── docs/                     integration reference and project status
 ```
 
-> [!NOTE]
-> This branch contains the complete Next.js demo spine, Ethereum contracts,
-> deployment records, frontend ABIs, and verified fixtures. Browser-side Noir
-> proving artifacts, the worker source, and Creditcoin contract source packages
-> are not included in this branch. The current issue flow therefore consumes a
-> verified proof fixture rather than generating a proof in the browser.
-
 ## Technology
 
 - **Frontend:** Next.js 16 App Router, React 19, TypeScript, Tailwind CSS 4
@@ -215,7 +279,7 @@ Copy-Item .env.example .env.local
 
 Open [http://localhost:3000](http://localhost:3000).
 
-The root route is the waitlist. Use `/preview` for the marketing site and
+The root route is the landing page. Use `/waitlist` for the signup form and
 `/connect` to start the product flow.
 
 ### Environment variables
@@ -308,6 +372,30 @@ code imports those files directly instead of duplicating addresses.
 
 Both demo tokens use six decimals.
 
+## How this makes money
+
+Nobody pays to read a credential.
+
+**Payer integration — the business.** A payroll platform or payout rail adds one
+line to its flow to anchor a commitment per payment. Its workers can then prove
+income anywhere. The payer gains a retention feature, and every worker they pay
+becomes a user. Semuni in the demo is exactly this — it pays off-chain and
+anchors only a hash.
+
+**Underwriting.** "How much can this person safely borrow?" Subscription or
+per-decision, sold to lenders who want a limit rather than a fact.
+
+**Embedded credit.** Get-paid-early inside someone else's app. Origination fees.
+
+**Reading a credential stays free and permissionless, permanently.** A
+verification a lender can perform without asking us is a stronger product than
+one they need a key for, and it is the reason the credential lives on Creditcoin
+rather than in our database. We charge the side that gains distribution, never
+the side that would otherwise have to trust us.
+
+**We are not the balance sheet.** Liquidity comes from the payer's own float, a
+depositor pool, or a licensed credit partner. Full detail in `docs/SPEC.md` §11.
+
 ## Security model
 
 - Exact payment amounts never enter an issued statement.
@@ -325,31 +413,39 @@ Both demo tokens use six decimals.
 
 ## Current status
 
-Implemented in the current application:
+All twelve MVP requirements are implemented and proven end to end on live
+testnets:
 
 - wallet connection and ownership verification;
-- multi-payer income review with evidence links;
+- multi-payer income review with per-period evidence links;
 - band-only profile and statement preview;
-- relayed credential issuance using verified fixture packages;
+- **proof generation in the user's own browser** — bb.js in a Web Worker; the
+  amounts and salts never leave the machine;
+- relayed credential issuance with an EIP-712 subject authorization;
 - explicit sharing consent;
-- public statement verification and lender reports; and
-- a disbursement API for the Creditcoin demo pool.
+- public statement verification, short aliases, and lender reports;
+- disbursement against a verified statement — real tokens have moved on
+  Creditcoin; and
+- an unattended relay that carries anchored payments to Creditcoin every few
+  minutes.
 
-Work still in progress:
+Not built, deliberately:
 
-- generating Noir proofs in the browser instead of loading fixture packages;
-- adding a user-facing disbursement experience;
-- adding a credential revocation interface; and
-- restoring the worker, circuit, and complete Creditcoin contract sources to
-  this branch.
+- a credential revocation interface — revocation exists on the contract and the
+  public page renders it; there is no screen for it;
+- API keys, metering or billing — the verification endpoint is free and
+  permissionless, and that is the product working as designed;
+- real capital — the credit pool is disclosed as simulated.
 
-See [`docs/STATUS.md`](./docs/STATUS.md) for the detailed implementation audit.
+The one timing constraint worth knowing: after a payment is anchored, Attestcoin
+trails Ethereum by roughly seven minutes before it can be relayed, so a freshly
+claimed demo history takes about ten minutes to become provable. That is the
+protocol's cadence, not a queue.
 
 ## Documentation
 
 - [Product documentation](https://orru.mintlify.site/)
 - [Frontend and contract integration](./docs/FRONTEND-INTEGRATION.md)
-- [Implementation status](./docs/STATUS.md)
 - [Contract workspace](./contracts/README.md)
 - [Fixture and proof-package guide](./fixtures/README.md)
 - [Contributor and agent rules](./AGENTS.md)

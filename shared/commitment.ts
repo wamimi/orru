@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Commitment encoding shared by the contracts, the circuit and the frontend.
  * Do not reimplement this elsewhere.
@@ -6,9 +5,8 @@
 
 import { encodeAbiParameters, keccak256, type Address, type Hex } from 'viem'
 
-/** bn254 scalar field modulus. */
-const BN254_MODULUS =
-  21888242871839275222246405745257275088548364400416034343698204186575808495617n
+/** The circuit holds amounts and periods as u64 witnesses. */
+const U64_MAX = (1n << 64n) - 1n
 
 export interface Payment {
   /** The worker being paid. */
@@ -51,15 +49,14 @@ export function saltFor(payer: Address, recipient: Address, period: bigint): Hex
   )
 }
 
-/** Values at or above the bn254 modulus are reduced silently in-circuit. */
+/** Anything the circuit cannot represent must fail here, not at proving time. */
 function assertProvable(value: bigint, label: string): void {
   if (value < 0n) {
     throw new Error(`commitment: ${label} must not be negative, got ${value}`)
   }
-  if (value >= BN254_MODULUS) {
+  if (value > U64_MAX) {
     throw new Error(
-      `commitment: ${label} is at or above the bn254 modulus and cannot be proven in Noir. ` +
-        `Got ${value}.`,
+      `commitment: ${label} exceeds the circuit's u64 witness range. Got ${value}.`,
     )
   }
 }

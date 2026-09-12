@@ -21,3 +21,19 @@ export const sepoliaClient = createPublicClient({
   chain: sepolia,
   transport: http(sepoliaRpc()),
 });
+
+/** Some hosted endpoints serve reads but refuse `eth_getLogs`. */
+export const sepoliaLogFallback = createPublicClient({
+  chain: sepolia,
+  transport: http("https://ethereum-sepolia-rpc.publicnode.com"),
+});
+
+export async function sepoliaLogs<T>(
+  query: (client: typeof sepoliaClient) => Promise<T>,
+): Promise<T> {
+  try {
+    return await query(sepoliaClient);
+  } catch {
+    return query(sepoliaLogFallback);
+  }
+}

@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   title: "Onchain income, made legible to credit",
   description:
     "Turn confirmed stablecoin income into a portable, band-only statement without publishing exact pay.",
-  alternates: { canonical: "/preview" },
+  alternates: { canonical: "/" },
 };
 
 export default function PreviewPage() {

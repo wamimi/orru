@@ -1,0 +1,155 @@
+---
+title: "Anchoring a payment"
+description: "The commitment, the transaction, and the one encoding you must not get wrong."
+---
+
+## The contract
+
+`PayerAnchor` on Ethereum Sepolia. Unowned, immutable, permissionless — anyone
+can call it, and nobody can upgrade it. It is a trust root, so it has no admin
+to compromise.
+
+```text
+PayerAnchor  0x16EaB9DA91D2AEea1F1138A95E42C37d1D47B7d2
+```
+
+```solidity
+function anchorPayment(bytes32 commitment) external;
+function anchorBatch(bytes32[] calldata commitments) external;  // max 32
+
+event PaymentAnchored(address indexed payer, bytes32 indexed commitment);
+```
+
+Batch a payroll run into one call. One transaction is one verification
+downstream, so thirty separate calls cost thirty verifications instead of one.
+
+## The commitment
+
+```
+commitment = keccak256(abi.encode(recipient, amount, period, salt))
+```
+
+<Warning>
+**`abi.encode`, not `abi.encodePacked`.** Four 32-byte words, 128 bytes total.
+The zero-knowledge circuit mirrors this exactly. One byte of difference and
+everything compiles, nothing verifies, and the failure surfaces somewhere that
+looks unrelated.
+</Warning>
+
+<ParamField path="recipient" type="address" required>
+  The worker's wallet. This becomes the credential's subject.
+</ParamField>
+
+<ParamField path="amount" type="uint256" required>
+  Base units of a six-decimal token. **$2,500 is `2500000000`.** Must fit in a
+  `uint64` — the circuit holds it as one.
+</ParamField>
+
+<ParamField path="period" type="uint256" required>
+  Your pay-cycle counter, incrementing by one. Payer-local: your period 7 has
+  nothing to do with anyone else's. The circuit requires three **consecutive**
+  periods, so gaps make a window unprovable.
+</ParamField>
+
+<ParamField path="salt" type="bytes32" required>
+  See below. This choice decides whether the commitment hides anything.
+</ParamField>
+
+## The salt decides your privacy
+
+<Tabs>
+  <Tab title="Random and secret — recommended">
+    32 bytes from a CSPRNG, kept by you and delivered to the worker off-chain.
+
+    The commitment is then **hiding**: nobody can recover the amount from it,
+    because they cannot guess the salt.
+
+    ```ts
+    import { randomBytes } from "node:crypto";
+    const salt = `0x${randomBytes(32).toString("hex")}`;
+    ```
+
+    <Warning>
+    You are the only holder. Lose it and that payment can never be proven —
+    there is no recovery, by design.
+    </Warning>
+  </Tab>
+  <Tab title="Deterministic — on-chain payers only">
+    Derived from public values, e.g. `keccak256(abi.encode(payroll, recipient, period))`.
+
+    The worker can recompute it without an off-chain channel, which is
+    convenient. But a commitment with a guessable salt is **binding, not
+    hiding**: anyone can brute-force the amount over a few thousand plausible
+    salaries.
+
+    Only reasonable when the amount is public anyway — which it is if you paid
+    in an ERC-20 on a public chain.
+    </Tab>
+</Tabs>
+
+## Anchoring
+
+<CodeGroup>
+```ts viem
+const commitment = keccak256(
+  encodeAbiParameters(
+    [{ type: "address" }, { type: "uint256" }, { type: "uint256" }, { type: "bytes32" }],
+    [recipient, amount, period, salt],
+  ),
+);
+
+await wallet.writeContract({
+  address: "0x16EaB9DA91D2AEea1F1138A95E42C37d1D47B7d2",
+  abi: payerAnchorAbi,
+  functionName: "anchorBatch",
+  args: [commitments],
+});
+```
+
+```bash cast
+COMMITMENT=$(cast keccak $(cast abi-encode \
+  "f(address,uint256,uint256,bytes32)" \
+  $RECIPIENT $AMOUNT $PERIOD $SALT))
+
+cast send 0x16EaB9DA91D2AEea1F1138A95E42C37d1D47B7d2 \
+  "anchorBatch(bytes32[])" "[$COMMITMENT]" \
+  --rpc-url $SEPOLIA_RPC_URL --account your-key
+```
+</CodeGroup>
+
+Anchoring the same commitment twice from the same address reverts with
+`AlreadyAnchored`. Scoping is per payer, so two payers may legitimately anchor
+the same commitment.
+
+## Delivering the slip
+
+If you used a random salt, the worker needs this to prove anything:
+
+```json
+{
+  "recipient": "0xBb605cf7604ef843e9Df15559257a73989DAe75A",
+  "amount":    "7500000000",
+  "period":    "3",
+  "salt":      "0xcf67dfc5a2ca49d9a44b0fc4edfbb46c8799f6af61f04d45822de811793f652a",
+  "commitment":"0xe8bd1d0502da34112ea376503b75173b9b9fd2958534de181f7e5454ed518783"
+}
+```
+
+Any channel you already trust for payslips — the portal they log into, an
+encrypted export, your existing HR system. It is the same sensitivity as a
+payslip, because that is what it is.
+
+<Note>
+The slip never touches Orru. It goes from you to the worker, and from the worker
+into their browser when they build a proof. If it reaches a server, the privacy
+property is gone.
+</Note>
+
+## Then what
+
+A relayer picks up your `PaymentAnchored` event, waits for the block to be
+attested, and submits the Attestcoin proof to Creditcoin — typically within
+minutes. After that the worker can build a proof and issue a statement whenever
+they like.
+
+You do not have to run that relayer, and it needs no permission from you.

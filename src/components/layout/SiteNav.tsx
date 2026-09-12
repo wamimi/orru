@@ -48,7 +48,7 @@ export function SiteNav() {
         </ul>
 
         <Link
-          href="/preview"
+          href="/"
           aria-label="Orru home"
           className="mkt-nav__brand"
           onClick={() => setOpen(false)}

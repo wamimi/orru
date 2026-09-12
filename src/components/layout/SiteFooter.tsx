@@ -6,7 +6,7 @@ export function SiteFooter() {
     <footer className="mkt-footer">
       <div className="mkt-container mkt-footer__top">
         <div className="mkt-footer__intro">
-          <Link href="/preview" aria-label="Orru home">
+          <Link href="/" aria-label="Orru home">
             <Lockup height={27} />
           </Link>
           <p>
@@ -30,7 +30,7 @@ export function SiteFooter() {
           <ul>
             <li><Link href="/connect">Launch app</Link></li>
             <li><Link href="/check">Check a statement</Link></li>
-            <li><Link href="/">Join the waitlist</Link></li>
+            <li><Link href="/waitlist">Join the waitlist</Link></li>
           </ul>
         </nav>
 

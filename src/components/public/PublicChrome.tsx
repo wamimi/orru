@@ -7,7 +7,7 @@ export function PublicChrome({ children }: { children: ReactNode }) {
     <div className="product-shell public-shell">
       <header className="public-nav">
         <nav className="public-nav__inner" aria-label="Public statement navigation">
-          <Link href="/preview" aria-label="Orru home" className="public-nav__brand">
+          <Link href="/" aria-label="Orru home" className="public-nav__brand">
             <Lockup height={22} />
           </Link>
           <span className="public-nav__label">Public verification</span>

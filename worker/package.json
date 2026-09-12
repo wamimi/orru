@@ -1,0 +1,29 @@
+{
+  "name": "@orru/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Off-chain relayer. Carries payment commitments from Ethereum Sepolia to Creditcoin through Attestcoin, and builds the income proof.",
+  "scripts": {
+    "scan": "tsx src/index.ts scan",
+    "attest": "tsx src/index.ts attest",
+    "prove": "tsx src/index.ts prove",
+    "status": "tsx src/index.ts status",
+    "run": "tsx src/index.ts run",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/*.test.ts",
+    "snapshot": "tsx src/index.ts snapshot",
+    "slips": "tsx src/index.ts slips",
+    "export-witness": "tsx src/index.ts export-witness"
+  },
+  "dependencies": {
+    "@gluwa/usc-sdk": "0.18.0",
+    "ethers": "^6.15.0",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

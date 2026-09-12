@@ -1,0 +1,87 @@
+name: attest
+
+# Carries anchored commitments from Ethereum Sepolia to Creditcoin. A payment is
+# unusable until it has been attested, so without this running the payroll keeps
+# paying and nothing new can ever be proved.
+#
+# Scan state lives in the cache rather than the repository: it holds a block
+# cursor and payment records, and re-scanning from the start block on every run
+# would grow slower every day.
+permissions:
+  contents: read
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: attest
+  cancel-in-progress: false
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Restore and save are separate because the cursor changes every run; a
+      # plain cache step would restore the first key it ever wrote and never
+      # update it.
+      - name: Restore scan state
+        id: state
+        uses: actions/cache/restore@v4
+        with:
+          path: worker/state
+          key: worker-state-${{ github.run_id }}
+          restore-keys: worker-state-
+
+      # shared/commitment.ts resolves its imports from shared/node_modules, not
+      # the worker's.
+      - name: Install dependencies
+        run: |
+          npm ci --no-audit --no-fund --prefix shared
+          npm ci --no-audit --no-fund --prefix worker
+
+      - name: Scan Sepolia, then relay to Creditcoin
+        working-directory: worker
+        env:
+          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          CREDITCOIN_RPC_URL: ${{ secrets.CREDITCOIN_RPC_URL }}
+          ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
+          PAYER_ANCHOR_ADDRESS: ${{ secrets.PAYER_ANCHOR_ADDRESS }}
+          DEMO_PAYROLL_ADDRESS: ${{ secrets.DEMO_PAYROLL_ADDRESS }}
+          ATTESTATION_REGISTRY_ADDRESS: ${{ secrets.ATTESTATION_REGISTRY_ADDRESS }}
+          CREDENTIAL_REGISTRY_ADDRESS: ${{ secrets.CREDENTIAL_REGISTRY_ADDRESS }}
+          WORKER_PRIVATE_KEY: ${{ secrets.WORKER_PRIVATE_KEY }}
+          WORKER_START_BLOCK: ${{ secrets.WORKER_START_BLOCK }}
+          SOURCE_CHAIN_KEY: '1'
+        run: |
+          set -euo pipefail
+
+          echo "::group::scan"
+          npx tsx src/index.ts scan
+          echo "::endgroup::"
+
+          # --limit bounds one pass. Verification cost rises with event age, so
+          # a backlog is worked oldest-first over several runs rather than in
+          # one long transaction batch that risks the job timeout.
+          echo "::group::attest"
+          npx tsx src/index.ts attest --submit --limit 15
+          echo "::endgroup::"
+
+          npx tsx src/index.ts status
+
+      - name: Save scan state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: worker/state
+          key: worker-state-${{ github.run_id }}

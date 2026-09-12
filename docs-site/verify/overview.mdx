@@ -1,0 +1,127 @@
+---
+title: "Verifying a statement"
+description: "Check that someone's income statement is real, without an account and without asking us."
+---
+
+An Orru statement is a record on Creditcoin. Anyone can read it. You do not need
+an account, an API key, or our cooperation — and that is deliberate. A
+verification service you have to trust is the thing Orru exists to remove.
+
+## Two ways, same answer
+
+<CardGroup cols={2}>
+  <Card title="Open the page" icon="browser">
+    `https://orru.xyz/verify/<credentialId>`
+
+    Server-rendered, no wallet, no login. Works in a fresh incognito window.
+    Hand this link to anyone.
+  </Card>
+  <Card title="Call the API" icon="code">
+    `GET /api/verify/<credentialId>`
+
+    The same data as JSON. Public and unauthenticated.
+  </Card>
+</CardGroup>
+
+Or skip us entirely and [read the contract yourself](/verify/on-chain). The page
+and the API are conveniences; the credential lives on-chain and answers to
+nobody.
+
+## What a statement proves
+
+Three separate facts, established independently.
+
+<Steps>
+  <Step title="The payments happened">
+    Attestcoin authenticated them against attested Ethereum history, through
+    Creditcoin's native query verifier. Not an API call to a bank, and not our
+    word — a proof verified on-chain.
+  </Step>
+  <Step title="The payer is recognised">
+    The payments came from an approved payer, identified by the contract that
+    emitted the event. A stranger paying themselves does not produce a statement.
+  </Step>
+  <Step title="The subject controls the wallet">
+    The holder signed an EIP-712 authorization at issuance. A proof shows
+    payments exist; it does not show that whoever submitted it owns the address
+    they named. Both are required.
+  </Step>
+</Steps>
+
+## What it does not prove
+
+<Warning>
+This does not prove future income, affordability, legal credit eligibility, or
+guaranteed repayment.
+</Warning>
+
+It is a dated record of past payments, not a forecast. Treat it as one input to
+your own decision.
+
+## What you get, and what you do not
+
+A statement carries an **income band**, never an amount.
+
+| You see | You do not see |
+|---|---|
+| `$2,500 – $4,000` per cycle | the exact figure |
+| how many periods were proven | the individual payments |
+| which payer the evidence came from | the payer's other workers |
+| the date the evidence ends | anything after that date |
+
+The band is enforced by a zero-knowledge circuit: the holder proves every
+payment fell inside one band without revealing what any of them were. That is
+the whole point, and it means a narrower band is more useful to you and less
+private to them.
+
+## Statements do not expire
+
+There is no expiry field, and that is a design decision rather than an omission.
+
+A statement attests a **dated past window**, and that stays true forever. Whether
+a window is recent enough to lend against is your policy, not ours — a payday
+lender and a mortgage underwriter will not agree, and neither should be forced
+into the other's answer.
+
+Every statement carries `evidenceEndDate`: the date of the most recent payment it
+proves. Apply your own maximum age to it.
+
+```js
+const MAX_AGE_DAYS = 30;
+
+const age = (Date.now() - Date.parse(statement.evidenceEndDate)) / 86_400_000;
+if (age > MAX_AGE_DAYS) {
+  // Not invalid — just older than your policy accepts.
+}
+```
+
+<Info>
+If you want this enforced on-chain rather than in your code, `DemoCreditPool`
+shows the pattern: a `minimumEvidenceHeight` floor that rejects anything older,
+and can only ever be raised.
+</Info>
+
+## Three states, and only three
+
+<AccordionGroup>
+  <Accordion title="valid">
+    Issued and not revoked. Read the band, the period count, and
+    `evidenceEndDate`, then apply your own freshness policy.
+  </Accordion>
+  <Accordion title="revoked">
+    The holder or the issuer withdrew it. `revokedAt` says when. Do not lend
+    against a revoked statement, regardless of how good the band looks.
+  </Accordion>
+  <Accordion title="unknown">
+    No statement with that id was ever issued. Usually a mistyped id. A
+    credential id is `0x` followed by 64 hex characters — anything else is not
+    one.
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+**Render on `status`, never on whether you got data back.** The contract returns
+a fully populated record for a revoked statement — same subject, same band,
+everything. Code that checks "did I receive a response?" will show a revoked
+statement as valid.
+</Warning>
