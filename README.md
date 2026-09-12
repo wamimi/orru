@@ -98,7 +98,9 @@ flowchart LR
 ## How Attestcoin, Creditcoin and zero-knowledge proofs are used
 
 Stated plainly, because each one does a specific job and none of them is
-decorative.
+decorative. The full technical walkthrough of the Attestcoin integration, with
+code pointers and transactions to open, is at
+[orru.mintlify.site/attestcoin](https://orru.mintlify.site/attestcoin).
 
 ### Attestcoin authenticates the Ethereum evidence
 
@@ -390,6 +392,73 @@ code imports those files directly instead of duplicating addresses.
 
 Both demo tokens use six decimals.
 
+## On-chain record
+
+Everything below is a real transaction on a public testnet, made while building
+and testing this submission. Open any of them.
+
+### Deployments
+
+| Contract | Chain | Creation transaction |
+|---|---|---|
+| EvmV1Decoder (library) | Creditcoin, block 5436625 | [`0x152105…41f8d1`](https://creditcoin-testnet.blockscout.com/tx/0x15210532924cc4149afef0dfc0782c5a15d6fa46073a901362b51f4d9541f8d1) |
+| ZKTranscriptLib (library) | Creditcoin, block 5436639 | [`0xfcf826…6b797c`](https://creditcoin-testnet.blockscout.com/tx/0xfcf826b9eaefa96f2bbe203cc17c092cc278acaf1cbf6f75dbda0b0a4e6b797c) |
+| IncomeVerifier | Creditcoin, block 5436640 | [`0xa6f5c8…3c8165`](https://creditcoin-testnet.blockscout.com/tx/0xa6f5c8c090a1258fe2a857d851cb0badcd23f61331505785aa8c1eb9ad3c8165) |
+| AttestationRegistry | Creditcoin, block 5436641 | [`0x8e4d40…3ed3d44`](https://creditcoin-testnet.blockscout.com/tx/0x8e4d402b9c834b2f3e4e0ab9a365661707266d5daf6de55ce63c642ad3ed3d44) |
+| NullifierRegistry | Creditcoin, block 5436654 | [`0x686c84…15ecbd`](https://creditcoin-testnet.blockscout.com/tx/0x686c84139b87f9ba2a65e81b5d72c1d57a090159bd629f8a943251625315ecbd) |
+| CredentialRegistry | Creditcoin, block 5436656 | [`0x9f23b4…ceea5e8`](https://creditcoin-testnet.blockscout.com/tx/0x9f23b4e0cec28c27561bb554eff165b3f3364075d63d4723825e6f021ceea5e8) |
+| mUSDC | Creditcoin, block 5436657 | [`0xaa38e2…31b6357`](https://creditcoin-testnet.blockscout.com/tx/0xaa38e23e5316196636f6281ee93aad90ec37fc2a02b5ae7834974995531b6357) |
+| DemoCreditPool | Creditcoin, block 5436658 | [`0xd6a64f…be0a0de`](https://creditcoin-testnet.blockscout.com/tx/0xd6a64f9b595f712265b7ddd3c459e2c1eacd6e90d7eb9fee26b5c8a2ebe0a0de) |
+| PayerAnchor | Sepolia, block 11605464 | [`0x0e358b…226605b`](https://sepolia.etherscan.io/tx/0x0e358bf6c900086be7f6c50af7707c5d649931b9f884d6d275e12acb3226605b) |
+| DemoUSDC | Sepolia, block 11626539 | [`0x3f4b86…5cba406`](https://sepolia.etherscan.io/tx/0x3f4b86e73381209ab0798462d534cd80ea57fc0794bac7aee73c199f75cba406) |
+| DemoPayroll | Sepolia, block 11626539 | [`0x5f0914…2365209`](https://sepolia.etherscan.io/tx/0x5f09149e644c0215a9f8d23268d4af88b5fe4ac59d2447b3dde9792d82365209) |
+
+### Payments and anchors on Ethereum
+
+| What | Transaction |
+|---|---|
+| Semuni anchors a three-period window for an existing wallet | [`0xfd96ea…89df1cbf`](https://sepolia.etherscan.io/tx/0xfd96eaf394b69a08fb6a0a080af3de3a034be57cc6cb66deb2b4222c89df1cbf) (block 11646662) |
+| Semuni anchors a demo-faucet claim for a fresh wallet | [`0xd359d8…613bcdbf`](https://sepolia.etherscan.io/tx/0xd359d8b2ac627d63662c5e04ee929d1f6ef8a5c2a0b74437c75240c7613bcdbf) (block 11688412) |
+| DemoPayroll pays seven workers every hour; latest run at the time of writing | [`0xc64ef2…1ca1e01`](https://sepolia.etherscan.io/tx/0xc64ef21041d5d47dc1840c3ae599df5fe3ff146d5063e83dc6461405a1ca1e01) (block 11688374), 81 transactions on the [contract](https://sepolia.etherscan.io/address/0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d) |
+
+### Attestations on Creditcoin
+
+`AttestationRegistry.execute` has been called more than sixty times, first by the
+deployer and then by the unattended relayer (`0x1BEBB5EF…bC217`). Each call
+submits an Attestcoin proof to the native query verifier and records the
+accepted commitments. Two to follow:
+
+| What | Transaction |
+|---|---|
+| Accepts the existing wallet's Semuni window (anchor `0xfd96ea…` above) | [`0x497430…83e5fd0`](https://creditcoin-testnet.blockscout.com/tx/0x49743077937e997117c5d690ac022c41ae11fb3b5216be21063433fa883e5fd0) (block 5440620) |
+| Accepts the fresh wallet's faucet claim (anchor `0xd359d8…` above), relayed by the cron | [`0x127c9f…238019b`](https://creditcoin-testnet.blockscout.com/tx/0x127c9fd2f49de5459b9cff72b3dd3af49c7df69941bbda097d4efe503238019b) (block 5474663) |
+
+The full list is on [Blockscout](https://creditcoin-testnet.blockscout.com/address/0x47172643d148300d2649C475d68a5bD49267e60C).
+
+### Statements issued
+
+| Subject | Payer | Band | Statement | Transaction |
+|---|---|---|---|---|
+| `0xf6A48D18…0b66C` | Demo Payroll | 4 | `orru:cred:7b6a24eb` | [`0x320693…1122d260`](https://creditcoin-testnet.blockscout.com/tx/0x32069376dc7690c063ad90630a2b52a1f8d363866cda0f9926f787fd1122d260) (block 5442366) |
+| `0xe058c205…3b34` | Demo Payroll | 5 | `orru:cred:55c29575` | [`0x9c4bd8…3614d576`](https://creditcoin-testnet.blockscout.com/tx/0x9c4bd8179f88dd793c4933fc456df16b8647a837b8df73fb5daa63f53614d576) (block 5451868) |
+| `0xBb605cf7…E75A` | Semuni | 6 | `orru:cred:576b974c` | [`0xb5f78f…902d4ab`](https://creditcoin-testnet.blockscout.com/tx/0xb5f78f3db90a4e700ce8e24054ececcf83f77978f80f682bc8f0c6aae902d4ab) (block 5474351) |
+| `0x57409fb0…ab41` (demo faucet) | Semuni | 6 | `orru:cred:b9e81cf2` | [`0xe02242…8650c8`](https://creditcoin-testnet.blockscout.com/tx/0xe022428a9d2bab2322ff270d9d20cb4a398ae290da1ea11bfb5d7ac5568650c8) (block 5474877) |
+
+Each one is readable at `https://orru.xyz/verify/<statement>` without an account,
+or with two calls to `CredentialRegistry` as described in the docs.
+
+### Credit drawn
+
+| Recipient | Amount | Transaction |
+|---|---|---|
+| `0xf6A48D18…0b66C` | 25 mUSDC | [`0xda13d2…c2f4233`](https://creditcoin-testnet.blockscout.com/tx/0xda13d2bc15e0db08654e0f5b486cc4b80f92ef378e5de04fc25b8f701c2f4233) (block 5445923) |
+| `0xe058c205…3b34` | 1,200 mUSDC | [`0xd7bf66…ddf5bc0`](https://creditcoin-testnet.blockscout.com/tx/0xd7bf66017e96c33090a4213bedba835e4647d6fb656ab5d118175cb43ddf5bc0) (block 5457474) |
+| `0xBb605cf7…E75A` | 900 mUSDC | [`0x997275…db439c1`](https://creditcoin-testnet.blockscout.com/tx/0x99727560c5f7032bf7fa017bc37209eb77874bc84e0aa2a75750a0db5db439c1) (block 5474358) |
+| `0x57409fb0…ab41` (demo faucet) | 450 mUSDC | [`0xd4237b…9ac52e6`](https://creditcoin-testnet.blockscout.com/tx/0xd4237bb4e5c045aab3532fa3e7157174e2ae0390adf7d93f33e9804dc9ac52e6) (block 5474900) |
+
+The last two rows are the two paths walked end to end on 12 September 2026: an
+existing wallet, and a fresh wallet that started from the demo faucet.
+
 ## How this makes money
 
 Nobody pays to read a credential.
@@ -574,6 +643,7 @@ worker their slip, so a payout rail integrates in an afternoon.
 ## Documentation
 
 - [Product documentation](https://orru.mintlify.site/)
+- [How Orru uses Attestcoin](https://orru.mintlify.site/attestcoin)
 - [Frontend and contract integration](./docs/FRONTEND-INTEGRATION.md)
 - [Contract workspace](./contracts/README.md)
 - [Fixture and proof-package guide](./fixtures/README.md)
