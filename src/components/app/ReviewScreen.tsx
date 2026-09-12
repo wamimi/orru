@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowRight } from "@phosphor-icons/react";
+import { ArrowRight, Check } from "@phosphor-icons/react";
 import { Callout } from "@/components/app/Callout";
 import { PaymentRow } from "@/components/app/PaymentRow";
 import { ScreenFrame } from "@/components/app/ScreenFrame";
 import { StageAside, StageList } from "@/components/app/StageList";
 import { useFlowSession } from "@/components/app/useFlowSession";
-import { ButtonLink } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { parseOutcome } from "@/lib/app";
 import { prover } from "@/lib/prove";
 import type { IncomeLookup, IncomeResponse } from "@/lib/income-types";
@@ -54,8 +54,13 @@ export function ReviewScreen() {
     undefined,
   );
   const [lookupError, setLookupError] = useState(false);
+  const [lookupAttempt, setLookupAttempt] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [incomes, setIncomes] = useState<IncomeLookup[]>(session.incomes);
+  const missingSession =
+    !qa &&
+    ready &&
+    (!session.address || !session.sessionToken || !session.signed);
 
   // Most of the wait on the statement screen is the one-time download, not the
   // work. Starting it here spends it while the payments are being read.
@@ -65,11 +70,7 @@ export function ReviewScreen() {
 
   useEffect(() => {
     if (qa || !ready) return;
-    if (!session.address || !session.sessionToken || !session.signed) {
-      setLiveScenario("failed");
-      setLookupError(true);
-      return;
-    }
+    if (!session.address || !session.sessionToken || !session.signed) return;
 
     let cancelled = false;
     fetch(`/api/income/${session.address}`, {
@@ -106,11 +107,11 @@ export function ReviewScreen() {
     return () => {
       cancelled = true;
     };
-  }, [qa, ready, session.address, session.sessionToken, session.signed, session.income?.payerAddress, update]);
+  }, [qa, ready, session.address, session.sessionToken, session.signed, session.income?.payerAddress, lookupAttempt, update]);
 
-  const scenario = qa ? qaScenario : (liveScenario ?? "happy");
+  const scenario = qa ? qaScenario : missingSession ? "failed" : (liveScenario ?? "happy");
   const source = qa ? undefined : livePayments;
-  const waitingForLive = !qa && liveScenario === null && !lookupError;
+  const waitingForLive = !qa && !missingSession && liveScenario === null && !lookupError;
 
   useEffect(() => {
     if (frozen !== null) return;
@@ -150,6 +151,14 @@ export function ReviewScreen() {
     setElapsed(20_000);
   }
 
+  function retryLookup() {
+    setLookupError(false);
+    setLiveScenario(null);
+    setLivePayments(undefined);
+    setElapsed(0);
+    setLookupAttempt((attempt) => attempt + 1);
+  }
+
   return (
     <ScreenFrame
       kicker="02 · Review"
@@ -178,26 +187,40 @@ export function ReviewScreen() {
       {incomes.length > 1 ? (
         <div className="mt-10 max-w-xl">
           <p className="eyebrow text-ink-faint">Verified employer</p>
-          <ul className="mt-3">
+          <p className="mt-3 text-sm text-ink-soft">
+            Pick the employer to build your statement from.
+          </p>
+          <ul className="mt-4 grid gap-3">
             {incomes.map((row) => {
               const active =
                 selected?.payerAddress.toLowerCase() === row.payerAddress.toLowerCase();
               return (
-                <li key={row.payerAddress} className="border-t border-rule">
+                <li
+                  key={row.payerAddress}
+                  className={`flex flex-wrap items-center justify-between gap-4 rounded-control border p-4 ${
+                    active
+                      ? "border-brand bg-[color:rgba(194,213,78,0.06)]"
+                      : "border-rule bg-canvas-raised"
+                  }`}
+                >
+                  <span>
+                    <span className="display-sm block text-ink">{row.payerName}</span>
+                    <span className="meta mt-1 block text-ink-faint">
+                      {row.incomeBand?.label ?? "No range yet"}
+                    </span>
+                  </span>
                   <button
                     type="button"
                     onClick={() => selectPayer(row)}
-                    className={`flex w-full items-center justify-between py-4 text-left ${
-                      active ? "text-ink" : "text-ink-soft"
+                    aria-pressed={active}
+                    className={`inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-[9px] border px-4 text-sm font-medium transition-tone active:scale-[0.985] ${
+                      active
+                        ? "border-brand bg-transparent text-brand"
+                        : "border-brand bg-brand text-canvas hover:bg-brand-hover"
                     }`}
                   >
-                    <span>
-                      <span className="display-sm">{row.payerName}</span>
-                      <span className="meta mt-1 block text-ink-faint">
-                        {row.incomeBand?.label ?? "No range yet"}
-                      </span>
-                    </span>
-                    <span className="meta">{active ? "Selected" : "Use this"}</span>
+                    {active ? <Check size={16} weight="bold" /> : null}
+                    {active ? "Selected" : "Use this payer"}
                   </button>
                 </li>
               );
@@ -229,9 +252,15 @@ export function ReviewScreen() {
             tone={display.stages[0].status === "empty" ? "empty" : "error"}
             title={display.recovery.title}
             body={display.recovery.body}
-            actionLabel={display.recovery.actionLabel}
-            actionHref={display.recovery.actionHref}
-          />
+            actionLabel={lookupError ? undefined : display.recovery.actionLabel}
+            actionHref={lookupError ? undefined : display.recovery.actionHref}
+          >
+            {lookupError ? (
+              <div className="mt-6">
+                <Button onClick={retryLookup}>Try again</Button>
+              </div>
+            ) : null}
+          </Callout>
         </div>
       ) : null}
 

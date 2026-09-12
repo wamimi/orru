@@ -56,6 +56,9 @@ function clonePayments(source: Payment[], evidence: EvidenceState): Payment[] {
 
 function settledEvidence(payment: Payment): EvidenceState {
   if (!payment.recognised) return "failed";
+  if (payment.evidence === "attested" || payment.evidence === "verified") {
+    return payment.evidence;
+  }
   if (payment.verifiedTx) return "verified";
   if (payment.sourceTx) return "found";
   return "verified";
@@ -99,10 +102,10 @@ export function reviewAt(
       payments: [],
       canContinue: false,
       recovery: {
-        title: "No qualifying payments found",
-        body: "Nothing incoming to this payout account met the bar: recognised sender, recent enough, and on a network we check.",
-        actionLabel: "Use a different address",
-        actionHref: "/connect",
+        title: "No confirmed payments yet",
+        body: "Nothing incoming to this payout account has been confirmed: recognised sender, recent enough, on a network we check. If you claimed a demo history, the faucet page shows how far along it is. No stablecoin pay yet? Get a demo history there.",
+        actionLabel: "Open the demo faucet",
+        actionHref: "/try",
       },
     };
   }
@@ -176,6 +179,9 @@ export function reviewAt(
     const payments = source.map((payment, index) => {
       if (index >= confirmed) return { ...payment, evidence: "found" as const };
       if (!payment.recognised) return { ...payment, evidence: "failed" as const };
+      if (payment.evidence === "attested" || payment.evidence === "verified") {
+        return { ...payment, evidence: "attested" as const };
+      }
       if (payment.sourceTx && !payment.verifiedTx) {
         return { ...payment, evidence: "found" as const };
       }
@@ -193,7 +199,9 @@ export function reviewAt(
       ? {
           ...payment,
           evidence:
-            payment.sourceTx && !payment.verifiedTx
+            payment.evidence === "attested" || payment.evidence === "verified"
+              ? ("attested" as const)
+              : payment.sourceTx && !payment.verifiedTx
               ? ("found" as const)
               : ("attested" as const),
         }
