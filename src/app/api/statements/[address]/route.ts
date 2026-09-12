@@ -17,7 +17,8 @@ export async function GET(
   if (session instanceof NextResponse) return session;
 
   try {
-    return NextResponse.json(await statementsFor(raw as `0x${string}`));
+    const fresh = request.nextUrl.searchParams.get("fresh") === "1";
+    return NextResponse.json(await statementsFor(raw as `0x${string}`, { fresh }));
   } catch {
     return NextResponse.json(
       { error: "Your statements could not be read right now." },
