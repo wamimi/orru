@@ -13,10 +13,10 @@ import {
 } from "@phosphor-icons/react";
 import { useFlowSession } from "@/components/app/useFlowSession";
 import { ButtonLink } from "@/components/ui/Button";
-import { appSteps, truncateAddress } from "@/lib/app";
+import { appSteps } from "@/lib/app";
 
 export function DashboardScreen() {
-  const { session, ready } = useFlowSession();
+  const { session } = useFlowSession();
   const hasIncome = Boolean(session.income?.provableWindow);
   const hasStatement = Boolean(session.credentialId);
 
@@ -61,13 +61,6 @@ export function DashboardScreen() {
               <ArrowRight size={17} />
             </ButtonLink>
           </div>
-        </div>
-        <div className="dashboard__status">
-          {ready && session.address
-            ? truncateAddress(session.address)
-            : ready
-              ? "Not connected"
-              : "Loading workspace"}
         </div>
       </header>
 

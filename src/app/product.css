@@ -722,3 +722,411 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Centered workflow shell */
+.app-shell {
+  display: block;
+  padding-top: 0;
+}
+
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  border-bottom: 1px solid var(--rule);
+  background: rgba(8, 8, 8, 0.88);
+  backdrop-filter: blur(18px);
+}
+
+.app-topbar__inner {
+  display: grid;
+  width: min(calc(100% - 2.5rem), 76rem);
+  min-height: 4.8rem;
+  margin-inline: auto;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.app-topbar__brand {
+  width: max-content;
+  color: white;
+}
+
+.app-topbar__links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.8rem;
+}
+
+.app-topbar__links a {
+  position: relative;
+  color: var(--ink-faint);
+  font-size: 0.76rem;
+  font-weight: 550;
+  transition: color 160ms ease;
+}
+
+.app-topbar__links a:hover,
+.app-topbar__links a.is-active {
+  color: var(--ink);
+}
+
+.app-topbar__links a.is-active::after {
+  position: absolute;
+  right: 0;
+  bottom: -0.65rem;
+  left: 0;
+  height: 1px;
+  content: "";
+  background: var(--brand);
+}
+
+.wallet-control-wrap {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.wallet-control {
+  display: inline-flex;
+  min-height: 2.65rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0.62rem 0.8rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 10px;
+  background: var(--canvas-raised);
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+
+.wallet-control:hover {
+  border-color: rgba(194, 213, 78, 0.45);
+}
+
+.wallet-control:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.wallet-control--verify {
+  border-color: rgba(194, 213, 78, 0.35);
+  background: var(--brand);
+  color: #080808;
+}
+
+.wallet-control--connected {
+  color: var(--ink-soft);
+}
+
+.wallet-control--disabled {
+  color: var(--ink-faint);
+}
+
+.wallet-control__dot {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 50%;
+  background: var(--brand);
+  box-shadow: 0 0 0.7rem rgba(194, 213, 78, 0.5);
+}
+
+.wallet-control__menu,
+.wallet-control__error {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  right: 0;
+  width: 13.5rem;
+  padding: 0.8rem;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: #161616;
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.38);
+}
+
+.wallet-control__menu p {
+  color: var(--ink-faint);
+  font-size: 0.67rem;
+}
+
+.wallet-control__menu button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+
+.wallet-control__error {
+  color: var(--ev-failed-fg);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.app-sidebar,
+.app-mobile-nav {
+  display: none;
+}
+
+.app-main {
+  min-width: 0;
+}
+
+.workflow-progress {
+  width: min(calc(100% - 2.5rem), 47rem);
+  margin: 2.2rem auto 0;
+  padding: 0.8rem 0;
+}
+
+.workflow-progress ol {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workflow-progress li {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+}
+
+.workflow-progress li:last-child {
+  flex: 0 0 auto;
+}
+
+.workflow-progress a {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  transition: color 160ms ease;
+}
+
+.workflow-progress__number {
+  display: grid;
+  width: 1.9rem;
+  height: 1.9rem;
+  place-items: center;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: var(--canvas-raised);
+  font-family: var(--font-product-mono), monospace;
+  font-size: 0.62rem;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.workflow-progress__line {
+  height: 1px;
+  flex: 1 1 auto;
+  margin-inline: 0.8rem;
+  background: var(--rule);
+}
+
+.workflow-progress li.is-active a {
+  color: var(--ink);
+}
+
+.workflow-progress li.is-active .workflow-progress__number {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #080808;
+}
+
+.workflow-progress li.is-done .workflow-progress__number {
+  border-color: rgba(194, 213, 78, 0.35);
+  color: var(--brand);
+}
+
+.workflow-progress li.is-done .workflow-progress__line {
+  background: rgba(194, 213, 78, 0.32);
+}
+
+.product-screen {
+  width: min(100%, 52rem);
+  padding-top: 3.25rem;
+}
+
+.product-screen__grid,
+.product-screen__grid.has-aside {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+}
+
+.product-screen__header,
+.product-screen__content,
+.product-screen__aside {
+  width: min(100%, 42rem);
+  margin-inline: auto;
+}
+
+.product-screen__content > * {
+  margin-inline: auto;
+}
+
+.product-screen__grid.has-aside .product-screen__content {
+  grid-column: 1;
+  order: 1;
+  margin-top: 3.5rem;
+}
+
+.product-screen__aside {
+  position: static;
+  grid-column: 1;
+  grid-row: auto;
+  order: 2;
+  margin-top: 1rem;
+}
+
+.product-title {
+  max-width: 13ch;
+  font-size: clamp(2.65rem, 5vw, 4.5rem);
+}
+
+.dashboard {
+  width: min(100%, 64rem);
+}
+
+.connect-status {
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: rgba(18, 18, 18, 0.76);
+}
+
+.connect-status > div {
+  display: grid;
+  min-height: 5.7rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1rem 1.15rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.connect-status > div:last-child {
+  border-bottom: 0;
+}
+
+.connect-status__icon {
+  display: grid;
+  width: 2.35rem;
+  height: 2.35rem;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--paper);
+  color: var(--ink-faint);
+}
+
+.connect-status .is-complete .connect-status__icon {
+  background: rgba(194, 213, 78, 0.14);
+  color: var(--brand);
+}
+
+.connect-status p {
+  font-size: 0.83rem;
+  font-weight: 600;
+}
+
+.connect-status div > span {
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+}
+
+.connect-status strong {
+  padding: 0.38rem 0.5rem;
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink-faint);
+  font-family: var(--font-product-mono), monospace;
+  font-size: 0.58rem;
+  font-weight: 500;
+}
+
+.connect-status .is-complete strong {
+  background: rgba(194, 213, 78, 0.12);
+  color: var(--brand);
+}
+
+.connect-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 700px) {
+  .app-shell {
+    padding-top: 0;
+  }
+
+  .app-topbar__inner {
+    width: calc(100% - 1.5rem);
+    min-height: 4.4rem;
+    grid-template-columns: auto 1fr;
+    gap: 0.7rem;
+  }
+
+  .app-topbar__links {
+    display: none;
+  }
+
+  .wallet-control-wrap,
+  .wallet-control {
+    min-width: 0;
+  }
+
+  .wallet-control-wrap {
+    justify-self: end;
+  }
+
+  .wallet-control {
+    max-width: 12rem;
+  }
+
+  .workflow-progress {
+    width: calc(100% - 1.5rem);
+    margin-top: 1.25rem;
+  }
+
+  .workflow-progress__label {
+    display: none;
+  }
+
+  .workflow-progress__line {
+    margin-inline: 0.5rem;
+  }
+
+  .product-screen {
+    padding-top: 2.25rem;
+  }
+
+  .connect-status > div {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .connect-status strong {
+    grid-column: 2;
+    width: max-content;
+  }
+}

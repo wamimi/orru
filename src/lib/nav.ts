@@ -8,8 +8,8 @@ export type NavLink = {
 export const navLinks: NavLink[] = [
   { label: "About", href: "#about" },
   { label: "Services", href: "#services" },
-  { label: "How it works", href: "#how-it-works" },
-  { label: "FAQ", href: "#faq" },
+  { label: "Use cases", href: "#use-cases" },
+  { label: "Docs", href: "https://orru.mintlify.site/" },
 ];
 
 export const primaryCta = { label: "Launch app", href: "/connect" };

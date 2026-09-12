@@ -35,7 +35,12 @@ export function SiteNav() {
         <ul className="mkt-nav__links">
           {navLinks.map((link) => (
             <li key={link.label}>
-              <Link href={link.href} className="mkt-nav__link">
+              <Link
+                href={link.href}
+                className="mkt-nav__link"
+                target={link.href.startsWith("http") ? "_blank" : undefined}
+                rel={link.href.startsWith("http") ? "noreferrer" : undefined}
+              >
                 {link.label}
               </Link>
             </li>
@@ -77,7 +82,12 @@ export function SiteNav() {
           <ul>
             {navLinks.map((link) => (
               <li key={link.label}>
-                <Link href={link.href} onClick={() => setOpen(false)}>
+                <Link
+                  href={link.href}
+                  onClick={() => setOpen(false)}
+                  target={link.href.startsWith("http") ? "_blank" : undefined}
+                  rel={link.href.startsWith("http") ? "noreferrer" : undefined}
+                >
                   {link.label}
                 </Link>
               </li>

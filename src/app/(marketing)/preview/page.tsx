@@ -6,6 +6,7 @@ import { SectionTag } from "@/components/marketing/SectionTag";
 import { ServicesAccordion } from "@/components/marketing/ServicesAccordion";
 import { SignalTerrain } from "@/components/marketing/SignalTerrain";
 import { StatementVisual } from "@/components/marketing/StatementVisual";
+import { UseCases } from "@/components/marketing/UseCases";
 import { howItWorks } from "@/lib/marketing";
 
 export const metadata: Metadata = {
@@ -92,6 +93,19 @@ export default function PreviewPage() {
         </div>
       </section>
 
+      <section id="use-cases" className="mkt-section mkt-use-cases-section">
+        <div className="mkt-container">
+          <div className="mkt-section-head mkt-section-head--center">
+            <SectionTag>Use cases</SectionTag>
+            <h2 className="mkt-section-title mkt-section-title--two-lines">
+              <span>One income history.</span>
+              <span>Three ways to use it.</span>
+            </h2>
+          </div>
+          <UseCases />
+        </div>
+      </section>
+
       <section id="how-it-works" className="mkt-section mkt-how">
         <div className="mkt-container">
           <div className="mkt-section-head">
@@ -121,8 +135,9 @@ export default function PreviewPage() {
         <div className="mkt-container mkt-faq-layout">
           <div>
             <SectionTag>Questions, answered</SectionTag>
-            <h2 className="mkt-section-title">
-              Clear enough to check for yourself.
+            <h2 className="mkt-section-title mkt-section-title--two-lines">
+              <span>Clear enough to check</span>
+              <span>for yourself.</span>
             </h2>
             <p className="mkt-faq__aside">
               An Orru statement confirms a specific history. It does not make a
