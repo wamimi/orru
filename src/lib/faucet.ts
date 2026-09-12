@@ -1,9 +1,12 @@
 import {
   createWalletClient,
+  decodeEventLog,
   encodeAbiParameters,
   getAddress,
   http,
+  isHash,
   keccak256,
+  parseAbi,
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -20,6 +23,22 @@ const PERIODS = [1n, 2n, 3n];
 
 /** Band 6. */
 const AMOUNT = 7_500_000_000n;
+
+/** Attestcoin needs a later covered block to build the continuity proof. */
+const ATTEST_LOOKAHEAD = 10n;
+const SOURCE_CHAIN_KEY = 1n;
+const CHAIN_INFO_PRECOMPILE = "0x0000000000000000000000000000000000000fd3";
+const chainInfoAbi = parseAbi([
+  "function get_latest_attestation_height_and_hash(uint64 chainKey) view returns ((uint64 height, bytes32 hash, bool isAttestation, bool exists) result)",
+]);
+
+export type FaucetProgress = {
+  phase: "ethereum" | "attestcoin" | "relayer" | "ready";
+  sourceBlock: string | null;
+  targetBlock: string | null;
+  latestAttestedBlock: string | null;
+  blocksRemaining: string | null;
+};
 
 /** The signing key does not match ORRU_FAUCET_PAYER. */
 export class FaucetMisconfigured extends Error {
@@ -48,6 +67,7 @@ export type FaucetStatus = {
   attested: boolean;
   /** True once the whole window is usable. */
   ready: boolean;
+  progress: FaucetProgress;
 };
 
 export function faucetConfigured(): boolean {
@@ -90,12 +110,15 @@ export function faucetBand(): number {
   return bandFor(AMOUNT).id;
 }
 
-export async function faucetStatus(recipient: string): Promise<FaucetStatus> {
+export async function faucetStatus(
+  recipient: string,
+  sourceTx?: Hex,
+): Promise<FaucetStatus> {
   const subject = getAddress(recipient);
   const payer = faucetPayer();
   const slips = faucetSlips(subject);
 
-  const [anchors, attestations] = await Promise.all([
+  const [anchors, attested] = await Promise.all([
     Promise.all(
       slips.map((slip) =>
         sepoliaClient.readContract({
@@ -106,22 +129,161 @@ export async function faucetStatus(recipient: string): Promise<FaucetStatus> {
         }),
       ),
     ),
-    Promise.all(
-      slips.map((slip) =>
-        creditcoinClient.readContract({
-          address: ADDRESSES[CREDITCOIN_ID].attestationRegistry,
-          abi: attestationRegistryAbi,
-          functionName: "acceptedByPayer",
-          args: [slip.commitment, payer],
-        }),
-      ),
-    ),
+    faucetAttested(subject),
   ]);
 
   const anchored = anchors.every(Boolean);
-  const attested = attestations.every(Boolean);
 
-  return { address: subject, payer, band: faucetBand(), anchored, attested, ready: attested };
+  const progress: FaucetProgress = {
+    phase: attested ? "ready" : anchored ? "attestcoin" : "ethereum",
+    sourceBlock: null,
+    targetBlock: null,
+    latestAttestedBlock: null,
+    blocksRemaining: null,
+  };
+
+  if (anchored && !attested && sourceTx && isHash(sourceTx)) {
+    const sourceBlock = await claimSourceBlock(subject, sourceTx);
+    if (sourceBlock !== null) {
+      const targetBlock = sourceBlock + ATTEST_LOOKAHEAD;
+      const latestAttestedBlock = await latestUsableAttestedBlock();
+      const blocksRemaining =
+        latestAttestedBlock === null || latestAttestedBlock >= targetBlock
+          ? 0n
+          : targetBlock - latestAttestedBlock;
+
+      progress.sourceBlock = sourceBlock.toString();
+      progress.targetBlock = targetBlock.toString();
+      progress.latestAttestedBlock = latestAttestedBlock?.toString() ?? null;
+      progress.blocksRemaining =
+        latestAttestedBlock === null ? null : blocksRemaining.toString();
+      if (latestAttestedBlock !== null && blocksRemaining === 0n) {
+        progress.phase = "relayer";
+      }
+    }
+  }
+
+  return {
+    address: subject,
+    payer,
+    band: faucetBand(),
+    anchored,
+    attested,
+    ready: attested,
+    progress,
+  };
+}
+
+/**
+ * Whether Creditcoin accepted this exact recipient window for the configured
+ * payer. A rejected parallel read is retried once on its own so one throttled
+ * public RPC request does not hide an otherwise usable history.
+ */
+export async function faucetAttested(recipient: string): Promise<boolean> {
+  const subject = getAddress(recipient);
+  const payer = faucetPayer();
+  const slips = faucetSlips(subject);
+  const read = (commitment: Hex) =>
+    creditcoinClient.readContract({
+      address: ADDRESSES[CREDITCOIN_ID].attestationRegistry,
+      abi: attestationRegistryAbi,
+      functionName: "acceptedByPayer",
+      args: [commitment, payer],
+    });
+
+  const first = await Promise.allSettled(
+    slips.map((slip) => read(slip.commitment)),
+  );
+  const accepted = await Promise.all(
+    first.map((result, index) =>
+      result.status === "fulfilled"
+        ? Promise.resolve(result.value)
+        : read(slips[index].commitment),
+    ),
+  );
+  return accepted.every(Boolean);
+}
+
+async function claimSourceBlock(
+  recipient: `0x${string}`,
+  txHash: Hex,
+): Promise<bigint | null> {
+  try {
+    const receipt = await sepoliaClient.getTransactionReceipt({ hash: txHash });
+    if (
+      receipt.status !== "success" ||
+      receipt.to?.toLowerCase() !== ADDRESSES[SEPOLIA_ID].payerAnchor.toLowerCase()
+    ) {
+      return null;
+    }
+
+    const expected = new Set(
+      faucetSlips(recipient).map((slip) => slip.commitment.toLowerCase()),
+    );
+    for (const log of receipt.logs) {
+      if (log.address.toLowerCase() !== ADDRESSES[SEPOLIA_ID].payerAnchor.toLowerCase()) {
+        continue;
+      }
+      try {
+        const decoded = decodeEventLog({
+          abi: payerAnchorAbi,
+          eventName: "PaymentAnchored",
+          data: log.data,
+          topics: log.topics,
+        });
+        if (decoded.args.payer.toLowerCase() === faucetPayer().toLowerCase()) {
+          expected.delete(decoded.args.commitment.toLowerCase());
+        }
+      } catch {
+        /* Ignore unrelated logs from the transaction. */
+      }
+    }
+
+    return expected.size === 0 ? receipt.blockNumber : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The worker requires both Creditcoin's chain-info precompile and the prover
+ * service to cover the target. The lower height is therefore the usable one.
+ */
+async function latestUsableAttestedBlock(): Promise<bigint | null> {
+  const proofBuilderUrl = (
+    process.env.PROOF_BUILDER_URL ??
+    "https://prover.cc3-testnet.creditcoin.network"
+  ).replace(/\/$/, "");
+
+  const [onChainResult, proverResult] = await Promise.allSettled([
+    creditcoinClient.readContract({
+      address: CHAIN_INFO_PRECOMPILE,
+      abi: chainInfoAbi,
+      functionName: "get_latest_attestation_height_and_hash",
+      args: [SOURCE_CHAIN_KEY],
+    }),
+    fetch(`${proofBuilderUrl}/api/v1/attested-height/${SOURCE_CHAIN_KEY}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(5_000),
+    }).then(async (response) => {
+      if (!response.ok) throw new Error("Attestcoin status read failed");
+      const body = (await response.json()) as {
+        attestedHeight?: number | string;
+      };
+      if (body.attestedHeight === undefined) {
+        throw new Error("Attestcoin status did not include a height");
+      }
+      return BigInt(body.attestedHeight);
+    }),
+  ]);
+
+  if (onChainResult.status !== "fulfilled" || proverResult.status !== "fulfilled") {
+    return null;
+  }
+  if (!onChainResult.value.exists) return null;
+
+  const onChainHeight = onChainResult.value.height;
+  return onChainHeight < proverResult.value ? onChainHeight : proverResult.value;
 }
 
 /** Anchors a claim on Ethereum as the payer. Idempotent. */

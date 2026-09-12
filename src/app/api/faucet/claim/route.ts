@@ -47,14 +47,14 @@ export async function POST(request: NextRequest) {
   try {
     // Anchoring twice reverts, so an existing claim returns its status.
     const txHash = await anchorClaim(address);
-    const status = await faucetStatus(address);
+    const status = await faucetStatus(address, txHash ?? undefined);
 
     return NextResponse.json({ ...status, txHash, pending: Boolean(txHash) && !status.anchored });
   } catch (error) {
     if (error instanceof FaucetUnfunded) {
       console.error(`[orru] faucet payer ${error.payer} is out of Sepolia ETH`);
       return NextResponse.json(
-        { error: "The demo payer has run dry. Please tell us — this is our problem, not yours." },
+        { error: "The demo payer has run dry. Please tell us. This is our problem, not yours." },
         { status: 503 },
       );
     }

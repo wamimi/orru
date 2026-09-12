@@ -58,6 +58,7 @@ export const demoPayrollAbi = parseAbi([
 export const payerAnchorAbi = parseAbi([
   "function anchoredBy(address payer, bytes32 commitment) view returns (bool)",
   "function anchorBatch(bytes32[] commitments)",
+  "event PaymentAnchored(address indexed payer, bytes32 indexed commitment)",
   "error AlreadyAnchored(address payer, bytes32 commitment)",
   "error EmptyCommitment()",
   "error EmptyBatch()",
