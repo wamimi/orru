@@ -1,8 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useLogin, useModalStatus, usePrivy, useWallets } from "@privy-io/react-auth";
-import { Check, SignOut, Wallet } from "@phosphor-icons/react";
+import {
+  useLogin,
+  useLogout,
+  useModalStatus,
+  usePrivy,
+  useWallets,
+} from "@privy-io/react-auth";
+import { UserPill } from "@privy-io/react-auth/ui";
+import { Wallet } from "@phosphor-icons/react";
 import { useFlowSession } from "@/components/app/useFlowSession";
 import { useLinkedWallet } from "@/components/app/useLinkedWallet";
 import { truncateAddress } from "@/lib/app";
@@ -28,7 +35,6 @@ function LiveWalletControl() {
   const { wallet, ready: walletsReady } = useLinkedWallet();
   const { isOpen: modalOpen } = useModalStatus();
   const [working, setWorking] = useState<"idle" | "connecting" | "signing">("idle");
-  const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // A login restored by the wallet library is not adopted on its own; the
   // user connects in this tab, or continues a session this tab already has.
@@ -50,6 +56,23 @@ function LiveWalletControl() {
 
   const address = wallet?.address ?? null;
   const live = ready && authenticated && address !== null && (chosen || session.connected);
+
+  // Privy's account pill logs the user out itself; keep the Orru session in step.
+  useLogout({
+    onSuccess: () => {
+      setChosen(false);
+      void Promise.all(wallets.map(forgetSite)).catch(() => {
+        /* cleared locally regardless */
+      });
+      void fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      }).catch(() => {
+        /* session is still cleared locally */
+      });
+      clear();
+    },
+  });
 
   useEffect(() => {
     if (!live || !address) return;
@@ -177,21 +200,6 @@ function LiveWalletControl() {
     }
   }
 
-  async function disconnect() {
-    setOpen(false);
-    setChosen(false);
-    await forget();
-    try {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
-    } catch {
-      /* session is still cleared locally */
-    }
-    clear();
-  }
-
   if (!ready) {
     return <span className="wallet-control wallet-control--disabled">Loading…</span>;
   }
@@ -244,26 +252,18 @@ function LiveWalletControl() {
   }
 
   return (
-    <div className="wallet-control-wrap">
-      <button
-        type="button"
-        className="wallet-control wallet-control--connected"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-      >
-        <span className="wallet-control__dot" />
-        <span>{truncateAddress(address as string)}</span>
-        <Check size={14} weight="bold" />
-      </button>
-      {open ? (
-        <div className="wallet-control__menu">
-          <p>Connected payout account</p>
-          <button type="button" onClick={() => void disconnect()}>
-            <SignOut size={15} />
-            Disconnect
-          </button>
-        </div>
-      ) : null}
+    <div className="wallet-control-wrap wallet-control-wrap--pill">
+      <UserPill
+        size={40}
+        ui={{ background: "secondary" }}
+        action={{ type: "login", options: { loginMethods: ["wallet"] } }}
+        label={
+          <span className="wallet-control__pill-label">
+            <span className="wallet-control__dot" />
+            {truncateAddress(address as string)}
+          </span>
+        }
+      />
     </div>
   );
 }

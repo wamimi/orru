@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import { Callout } from "@/components/app/Callout";
 import { ScreenFrame } from "@/components/app/ScreenFrame";
 import { PublicChrome } from "@/components/public/PublicChrome";
+import { CopyableId } from "@/components/ui/CopyableId";
+import { aliasFromCredentialId } from "@/lib/alias";
 import { creditcoinTxUrl, sepoliaTxUrl, truncateHex } from "@/lib/chain";
 import { buildReport } from "@/lib/report";
 
@@ -12,7 +15,13 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  return { title: `Income check ${truncateHex(id)}` };
+  let label = id;
+  try {
+    label = decodeURIComponent(id);
+  } catch {
+    /* keep raw */
+  }
+  return { title: `Income check ${truncateHex(label)}` };
 }
 
 export default async function ReportPage({
@@ -22,7 +31,25 @@ export default async function ReportPage({
 }) {
   const { id } = await params;
   const report = await buildReport(id);
+  const credential = report.credential;
   const passed = report.result === "pass";
+
+  if (!credential) {
+    return (
+      <PublicChrome>
+        <ScreenFrame kicker="Lender check" title="This statement was not found.">
+          <Callout
+            tone="empty"
+            title="Unknown statement"
+            body="Nothing on Creditcoin matches this id. Check the link and try again."
+          />
+        </ScreenFrame>
+      </PublicChrome>
+    );
+  }
+
+  const alias = credential.alias ?? aliasFromCredentialId(credential.credentialId);
+  const band = credential.incomeBand?.label;
 
   return (
     <PublicChrome>
@@ -32,18 +59,21 @@ export default async function ReportPage({
         lede="A range, a period count, and whether the employer is recognised. Exact pay is not in this page."
       >
         <p
-          className={`meta ${
+          className={`meta flex flex-wrap items-center gap-x-3 gap-y-2 ${
             passed ? "text-brand" : "text-[color:var(--ev-failed-fg)]"
           }`}
         >
-          {passed ? "Pass" : "Fail"}
-          <span className="mx-3 text-rule-strong">·</span>
-          {truncateHex(id)}
+          <span>{passed ? "Pass" : "Fail"}</span>
+          <span className="text-rule-strong">·</span>
+          <CopyableId value={alias} />
+          <span className="text-rule-strong">·</span>
+          <CopyableId
+            value={credential.credentialId}
+            display={truncateHex(credential.credentialId)}
+          />
         </p>
 
-        {report.income?.incomeBand ? (
-          <p className="display-md mt-6 text-ink">{report.income.incomeBand.label}</p>
-        ) : null}
+        {band ? <p className="display-md mt-6 text-ink">{band}</p> : null}
 
         <ul className="mt-10 max-w-xl">
           {report.reasonCodes.map((row) => (
@@ -90,8 +120,9 @@ export default async function ReportPage({
 
         {report.creditcoinTxs.length > 0 ? (
           <p className="meta mt-10 text-ink-faint">
-            {report.creditcoinTxs.length} confirmation
-            {report.creditcoinTxs.length === 1 ? "" : "s"} on Creditcoin
+            {report.creditcoinTxs.length}{" "}
+            {report.creditcoinTxs.length === 1 ? "confirmation" : "confirmations"} on
+            Creditcoin
           </p>
         ) : null}
       </ScreenFrame>

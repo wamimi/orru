@@ -824,6 +824,27 @@
   justify-content: flex-end;
 }
 
+.wallet-control-wrap--pill {
+  align-items: center;
+  min-height: 2.65rem;
+}
+
+.wallet-control-wrap--pill [class*="UserPill"],
+.wallet-control-wrap--pill button {
+  border-radius: 10px !important;
+}
+
+.wallet-control__pill-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .wallet-control {
   display: inline-flex;
   min-height: 2.65rem;
@@ -1164,4 +1185,199 @@
     grid-column: 2;
     width: max-content;
   }
+}
+
+/* Credential statement card */
+.credential-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--rule-strong);
+  border-radius: 14px;
+  background:
+    linear-gradient(165deg, rgba(194, 213, 78, 0.08), transparent 42%),
+    rgba(18, 18, 18, 0.92);
+  box-shadow:
+    0 1.5rem 3rem rgba(0, 0, 0, 0.35),
+    inset 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.credential-card::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  content: "";
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--brand) 20%,
+    rgba(215, 229, 109, 0.9) 50%,
+    var(--brand) 80%,
+    transparent
+  );
+}
+
+.credential-card__top,
+.credential-card__rows > div,
+.credential-card__privacy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.credential-card__top {
+  padding: 1rem 1.15rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.credential-card__brand,
+.credential-card__status,
+.credential-card__privacy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.credential-card__brand {
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.credential-card__brand svg,
+.credential-card__status,
+.credential-card__privacy svg {
+  color: var(--brand);
+}
+
+.credential-card__status {
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  background: var(--ev-verified-bg);
+  color: var(--ev-verified-fg);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.credential-card.is-preview .credential-card__status {
+  background: var(--ev-found-bg);
+  color: var(--ev-found-fg);
+}
+
+.credential-card.is-revoked .credential-card__status {
+  background: var(--ev-failed-bg);
+  color: var(--ev-failed-fg);
+}
+
+.credential-card.is-revoked .credential-card__status svg,
+.credential-card.is-preview .credential-card__status svg {
+  color: currentColor;
+}
+
+.credential-card__range {
+  padding: 1.55rem 1.15rem 1.35rem;
+}
+
+.credential-card__range span,
+.credential-card__range small {
+  display: block;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+}
+
+.credential-card__range strong {
+  display: block;
+  margin-block: 0.35rem 0.15rem;
+  font-family: var(--font-product-display), Georgia, serif;
+  font-size: clamp(1.85rem, 3.4vw, 2.55rem);
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.credential-card__rows {
+  margin: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.credential-card__rows > div {
+  padding: 0.85rem 1.15rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.credential-card__rows dt {
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+}
+
+.credential-card__rows dd {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-product-mono), monospace;
+  font-size: 0.7rem;
+  text-align: right;
+}
+
+.credential-card__id-row dd {
+  display: inline-flex;
+  max-width: 70%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.credential-card__id {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.credential-card__privacy {
+  justify-content: flex-start;
+  padding: 0.9rem 1.15rem;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+
+.copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.28rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-soft);
+  font-family: var(--font-product-sans), sans-serif;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.copy-button:hover {
+  border-color: rgba(194, 213, 78, 0.45);
+  background: rgba(194, 213, 78, 0.1);
+  color: var(--brand-hover);
+}
+
+.copyable-id {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.copyable-id code {
+  font-family: var(--font-product-mono), monospace;
+  font-size: 0.78rem;
+  color: var(--ink);
 }

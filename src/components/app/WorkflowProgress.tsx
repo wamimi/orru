@@ -8,6 +8,7 @@ const workflow = [
   { href: "/profile", label: "Profile" },
   { href: "/credential", label: "Credential" },
   { href: "/consent", label: "Share" },
+  { href: "/borrow", label: "Borrow" },
 ] as const;
 
 export function WorkflowProgress() {

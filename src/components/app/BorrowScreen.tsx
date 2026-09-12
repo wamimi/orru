@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowSquareOut, CheckCircle } from "@phosphor-icons/react";
+import { AddMusdcButton } from "@/components/app/AddMusdcButton";
 import { Callout } from "@/components/app/Callout";
 import { ScreenFrame } from "@/components/app/ScreenFrame";
 import { useFlowSession } from "@/components/app/useFlowSession";
@@ -263,10 +264,14 @@ export function BorrowScreen() {
         <Callout
           tone="empty"
           title="No account connected"
-          body="Connect the payout account you get paid into to see what you can draw."
+          body="Connect the payout account you get paid into to see what you can draw. You can add mUSDC to this wallet first so the transfer is visible later."
           actionLabel="Connect an account"
           actionHref="/connect"
-        />
+        >
+          <div className="mt-5">
+            <AddMusdcButton />
+          </div>
+        </Callout>
       </ScreenFrame>
     );
   }
@@ -291,10 +296,14 @@ export function BorrowScreen() {
         <Callout
           tone="empty"
           title="You need a statement first"
-          body="Once your income is confirmed and you have issued a statement, what you can borrow appears here."
+          body="Once your income is confirmed and you have issued a statement, what you can borrow appears here. You can add mUSDC to this wallet now so the transfer is visible later."
           actionLabel="Check your income"
           actionHref="/review"
-        />
+        >
+          <div className="mt-5">
+            <AddMusdcButton />
+          </div>
+        </Callout>
       </ScreenFrame>
     );
   }
@@ -308,6 +317,13 @@ export function BorrowScreen() {
       <div className="grid gap-10 md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] md:gap-14">
         <section>
           <h2 className="display-sm text-ink">How much do you need?</h2>
+          <p className="mt-3 max-w-md text-sm leading-relaxed text-ink-soft">
+            Add mUSDC to this wallet first so the transfer is visible when it
+            arrives.
+          </p>
+          <div className="mt-4">
+            <AddMusdcButton />
+          </div>
 
           <label className="sr-only" htmlFor="borrow-amount">
             Amount in mUSDC

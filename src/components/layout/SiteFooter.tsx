@@ -31,6 +31,7 @@ export function SiteFooter() {
             <li><Link href="/connect">Launch app</Link></li>
             <li><Link href="/check">Check a statement</Link></li>
             <li><Link href="/waitlist">Join the waitlist</Link></li>
+            <li><Link href="https://orru.mintlify.site/">Documentation</Link></li>
           </ul>
         </nav>
 

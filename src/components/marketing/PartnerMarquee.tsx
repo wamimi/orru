@@ -11,6 +11,25 @@ function EthereumMark() {
   );
 }
 
+function AttestcoinMark() {
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <circle
+        cx="24"
+        cy="24"
+        r="21.25"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.35"
+      />
+      <path fill="currentColor" d="M14.2 35.8 22.6 11.6h4.4L18.6 35.8z" />
+      <path fill="currentColor" d="M27 11.6h4.35l1.95 5.8-3.45 1.15z" />
+      <path fill="currentColor" d="M31.15 24.9 33.9 33.2h-4.3l-1.7-5.05z" />
+      <path fill="currentColor" d="M17.9 24.35 38.6 17.2l.95 2.75-20.7 7.15z" />
+    </svg>
+  );
+}
+
 function LogoGroup({ hidden = false }: { hidden?: boolean }) {
   return (
     <div className="mkt-marquee__group" aria-hidden={hidden || undefined}>
@@ -25,7 +44,8 @@ function LogoGroup({ hidden = false }: { hidden?: boolean }) {
         width={1321}
         height={250}
       />
-      <div className="mkt-partner-logo mkt-partner-logo--word">
+      <div className="mkt-partner-logo">
+        <AttestcoinMark />
         <span>attestcoin</span>
       </div>
       <Image

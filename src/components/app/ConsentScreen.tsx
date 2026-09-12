@@ -8,8 +8,11 @@ import { ScreenFrame } from "@/components/app/ScreenFrame";
 import { ShareTicket } from "@/components/app/ShareTicket";
 import { useFlowSession } from "@/components/app/useFlowSession";
 import { Button, ButtonLink } from "@/components/ui/Button";
+import { CredentialCard } from "@/components/ui/CredentialCard";
+import { aliasFromCredentialId } from "@/lib/alias";
 import { parseOutcome } from "@/lib/app";
-import { demoRequest, expiredRequest } from "@/lib/mock";
+import { credentialFromIncome } from "@/lib/income-view";
+import { demoCredential, demoRequest, expiredRequest } from "@/lib/mock";
 
 export function ConsentScreen() {
   const search = useSearchParams();
@@ -26,6 +29,28 @@ export function ConsentScreen() {
       : demoRequest;
   const bound = Boolean(requestParam || session.requestId);
   const expired = request.id === expiredRequest.id || outcome === "error";
+
+  const card = (() => {
+    if (session.income && session.credentialId) {
+      return {
+        ...credentialFromIncome(session.income),
+        id: aliasFromCredentialId(session.credentialId),
+        hexId: session.credentialId,
+        issuedOn: "Issued",
+        status: "Valid" as const,
+      };
+    }
+    if (session.income) return credentialFromIncome(session.income);
+    return {
+      ...demoCredential,
+      id: session.credentialId
+        ? aliasFromCredentialId(session.credentialId)
+        : "Not issued yet",
+      hexId: session.credentialId,
+      issuedOn: session.credentialId ? "Issued" : "Not issued yet",
+      status: session.credentialId ? ("Valid" as const) : ("Preview" as const),
+    };
+  })();
 
   if (outcome === "empty") {
     return (
@@ -69,6 +94,7 @@ export function ConsentScreen() {
         kicker="05 · Share"
         title="Shared."
         lede="They can look this up without an account. You can stop sharing from your profile; the statement itself stays yours."
+        aside={<CredentialCard data={card} />}
       >
         <div className="border-t-2 border-brand pt-6 md:pt-8">
           <p className="meta flex items-center gap-2 text-brand">
@@ -80,8 +106,11 @@ export function ConsentScreen() {
             {request.purpose}. Window: {request.expires}.
           </p>
         </div>
-        <div className="mt-10">
-          <ButtonLink href="/profile">Back to your profile</ButtonLink>
+        <div className="mt-10 flex flex-wrap gap-3">
+          <ButtonLink href="/borrow">Draw against this statement</ButtonLink>
+          <ButtonLink href="/profile" variant="quiet">
+            Back to your profile
+          </ButtonLink>
         </div>
       </ScreenFrame>
     );
@@ -96,6 +125,7 @@ export function ConsentScreen() {
           ? "This page is tied to a specific requester. Nothing is sent until you confirm."
           : "You choose the requester and the window. Nothing is sent until you confirm."
       }
+      aside={<CredentialCard data={card} />}
     >
       <ShareTicket
         party={request.party}

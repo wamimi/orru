@@ -12,6 +12,7 @@ export type VerifyPayload = {
   issuedAt: string | null;
   revokedAt: string | null;
   subjectAddress: `0x${string}` | null;
+  evidencePayer: `0x${string}` | null;
   walletBindingProven: boolean;
   incomeBand: { id: number; label: string } | null;
   periodsProven: number;
@@ -57,6 +58,7 @@ export function unknownVerify(id: string): VerifyPayload {
     issuedAt: null,
     revokedAt: null,
     subjectAddress: null,
+    evidencePayer: null,
     walletBindingProven: false,
     incomeBand: null,
     periodsProven: 0,
@@ -71,7 +73,7 @@ export function unknownVerify(id: string): VerifyPayload {
 }
 
 export async function readCredential(id: string): Promise<VerifyPayload> {
-  const credentialId = resolveCredentialId(id);
+  const credentialId = await resolveCredentialId(id);
   if (!credentialId) return unknownVerify(id);
 
   const address = ADDRESSES[CREDITCOIN_ID].credentialRegistry;
@@ -104,9 +106,10 @@ export async function readCredential(id: string): Promise<VerifyPayload> {
     issuedAt,
     revokedAt: isoFromUnix(credential.revokedAt),
     subjectAddress: credential.subject,
+    evidencePayer: credential.evidencePayer,
     walletBindingProven: true,
     incomeBand: band ? { id: band.id, label: band.label } : null,
-    periodsProven: credential.periodsProven,
+    periodsProven: Number(credential.periodsProven),
     verificationPeriod: evidenceEndDate
       ? { from: evidenceEndDate.slice(0, 10), to: evidenceEndDate.slice(0, 10) }
       : null,

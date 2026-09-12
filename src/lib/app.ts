@@ -6,6 +6,7 @@ export const appSteps = [
   { id: "profile", href: "/profile", label: "Profile", number: "03" },
   { id: "credential", href: "/credential", label: "Credential", number: "04" },
   { id: "consent", href: "/consent", label: "Share", number: "05" },
+  { id: "borrow", href: "/borrow", label: "Borrow", number: "06" },
 ] as const;
 
 export type AppStepId = (typeof appSteps)[number]["id"];

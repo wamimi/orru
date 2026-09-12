@@ -1,5 +1,6 @@
-import { EvidenceBadge } from "./EvidenceBadge";
-import { MetaRow } from "./MetaRow";
+import { CheckCircle, EyeSlash } from "@phosphor-icons/react/dist/ssr";
+import { Mark } from "@/components/brand/Mark";
+import { CopyButton } from "@/components/ui/CopyButton";
 
 export type CredentialData = {
   id: string;
@@ -10,17 +11,26 @@ export type CredentialData = {
   payer: string;
   issuedOn: string;
   status: "Valid" | "Expired" | "Revoked" | "Preview";
+  /** Optional full hex id for copy/paste into /check */
+  hexId?: string | null;
 };
 
 export const sampleCredential: CredentialData = {
-  id: "Example statement",
-  band: "$3,000 – $5,000",
-  bandUnit: "per month",
-  periods: "4 consecutive",
+  id: "orru:cred:7b6a24eb",
+  band: "$2,500 – $4,000",
+  bandUnit: "per pay cycle",
+  periods: "3 consecutive",
   lastPayment: "6 days ago",
-  payer: "Admitted payer",
+  payer: "Verified employer",
   issuedOn: "Example",
   status: "Preview",
+};
+
+const STATUS_LABEL: Record<CredentialData["status"], string> = {
+  Valid: "Valid",
+  Expired: "Expired",
+  Revoked: "Revoked",
+  Preview: "Preview",
 };
 
 export function CredentialCard({
@@ -32,50 +42,69 @@ export function CredentialCard({
   chrome?: boolean;
   className?: string;
 }) {
+  const statusTone =
+    data.status === "Valid"
+      ? "is-valid"
+      : data.status === "Revoked" || data.status === "Expired"
+        ? "is-revoked"
+        : "is-preview";
+  const copyValue = data.id.startsWith("orru:cred:")
+    ? data.id
+    : (data.hexId ?? data.id);
+  const canCopy =
+    data.id.startsWith("orru:cred:") || Boolean(data.hexId?.startsWith("0x"));
+
   return (
     <div
-      className={`overflow-hidden rounded-card border border-rule bg-paper ${className ?? ""}`}
-      style={{ boxShadow: "0 1px 3px rgba(18,48,43,0.04)" }}
+      className={`credential-card ${statusTone} ${className ?? ""}`}
+      data-chrome={chrome ? "true" : "false"}
     >
-      {chrome ? (
-        <div className="flex items-center gap-2 border-b border-rule px-4 py-3">
-          <span className="h-2.5 w-2.5 rounded-full bg-rule-strong" />
-          <span className="h-2.5 w-2.5 rounded-full bg-rule-strong" />
-          <span className="h-2.5 w-2.5 rounded-full bg-rule-strong" />
-          <span className="meta ml-2 text-ink-faint">Income credential</span>
+      <div className="credential-card__top">
+        <div className="credential-card__brand">
+          <Mark size={18} />
+          <span>orru statement</span>
         </div>
-      ) : null}
+        <span className="credential-card__status">
+          <CheckCircle size={14} weight="fill" />
+          {STATUS_LABEL[data.status]}
+        </span>
+      </div>
 
-      <div className="px-6 py-6 md:px-7">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="eyebrow text-ink-faint">Verified income band</p>
-            <p className="display-md mt-2 whitespace-nowrap text-ink">
-              {data.band}
-            </p>
-            <p className="meta mt-1 text-ink-faint">{data.bandUnit}</p>
-          </div>
-          <EvidenceBadge
-            state={data.status === "Preview" ? "found" : "verified"}
-            label={data.status}
-          />
+      <div className="credential-card__range">
+        <span>Verified income range</span>
+        <strong>{data.band}</strong>
+        <small>{data.bandUnit}</small>
+      </div>
+
+      <dl className="credential-card__rows">
+        <div>
+          <dt>Periods</dt>
+          <dd>{data.periods}</dd>
         </div>
-
-        <div className="mt-6">
-          <MetaRow label="Periods" value={data.periods} />
-          <MetaRow
-            label="Last payment"
-            value={data.lastPayment}
-            trailing={<EvidenceBadge state={data.status === "Preview" ? "found" : "attested"} />}
-          />
-          <MetaRow label="Source" value={data.payer} />
-          <MetaRow label="Issued on" value={data.issuedOn} />
-          <MetaRow label="Credential" value={data.id} />
+        <div>
+          <dt>Last payment</dt>
+          <dd>{data.lastPayment}</dd>
         </div>
+        <div>
+          <dt>Source</dt>
+          <dd>{data.payer}</dd>
+        </div>
+        <div>
+          <dt>Issued</dt>
+          <dd>{data.issuedOn}</dd>
+        </div>
+        <div className="credential-card__id-row">
+          <dt>Statement</dt>
+          <dd>
+            <span className="credential-card__id">{data.id}</span>
+            {canCopy ? <CopyButton value={copyValue} label="Copy statement id" /> : null}
+          </dd>
+        </div>
+      </dl>
 
-        <p className="mt-5 text-sm leading-relaxed text-ink-faint">
-          Exact payment amounts are not part of this credential.
-        </p>
+      <div className="credential-card__privacy">
+        <EyeSlash size={15} />
+        <span>Exact pay excluded</span>
       </div>
     </div>
   );

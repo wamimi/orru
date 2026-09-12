@@ -10,6 +10,7 @@ import {
   ShareNetwork,
   TrendUp,
   Wallet,
+  Coins,
 } from "@phosphor-icons/react";
 import { useFlowSession } from "@/components/app/useFlowSession";
 import { ButtonLink } from "@/components/ui/Button";
@@ -26,12 +27,13 @@ export function DashboardScreen() {
       ? { href: "/review", label: "Review income" }
       : !hasStatement
         ? { href: "/credential", label: "Issue statement" }
-        : { href: "/consent", label: "Share statement" };
+        : { href: "/borrow", label: "Draw against statement" };
 
   const taskState = (id: string) => {
     if (id === "connect") return session.connected && session.signed;
     if (id === "review" || id === "profile") return hasIncome;
     if (id === "credential") return hasStatement;
+    if (id === "consent") return hasStatement;
     return false;
   };
 
@@ -41,6 +43,7 @@ export function DashboardScreen() {
     profile: "See the income range created from confirmed periods.",
     credential: "Create a portable, band-only statement.",
     consent: "Choose what to share and who can see it.",
+    borrow: "Add mUSDC to the wallet, then draw against the statement.",
   };
 
   return (
@@ -131,6 +134,7 @@ export function DashboardScreen() {
               profile: TrendUp,
               credential: Files,
               consent: ShareNetwork,
+              borrow: Coins,
             };
             const Icon = icons[step.id];
             return (

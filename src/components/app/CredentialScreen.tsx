@@ -7,6 +7,7 @@ import { ArrowRight, ArrowSquareOut, ShareNetwork } from "@phosphor-icons/react"
 import { Callout } from "@/components/app/Callout";
 import { ScreenFrame } from "@/components/app/ScreenFrame";
 import { useFlowSession } from "@/components/app/useFlowSession";
+import { AddMusdcButton } from "@/components/app/AddMusdcButton";
 import { useLinkedWallet } from "@/components/app/useLinkedWallet";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { HiddenFields, SharedFields } from "@/components/ui/FieldDisclosure";
@@ -410,6 +411,9 @@ export function CredentialScreen() {
                 : `Anyone can check ${aliasFromCredentialId(issued.id)} without an account.`
             }
           >
+            <div className="mt-5">
+              <AddMusdcButton />
+            </div>
             <div className="mt-5 flex flex-wrap gap-3">
               <ButtonLink href={`${verifyPath(issued.id)}?fresh=1`} variant="outline">
                 Open the public page

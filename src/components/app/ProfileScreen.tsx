@@ -202,6 +202,7 @@ export function ProfileScreen() {
       return {
         ...credentialFromIncome(session.income),
         id: aliasFromCredentialId(session.credentialId),
+        hexId: session.credentialId,
         issuedOn: "Issued",
         status: "Valid" as const,
       };

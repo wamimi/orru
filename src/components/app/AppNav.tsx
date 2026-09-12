@@ -25,7 +25,7 @@ export function AppNav() {
           <Link
             href="/review"
             className={
-              ["/review", "/profile", "/credential", "/consent"].some((route) =>
+              ["/review", "/profile", "/credential", "/consent", "/borrow"].some((route) =>
                 pathname.startsWith(route),
               )
                 ? "is-active"

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { Callout } from "@/components/app/Callout";
 import { ScreenFrame } from "@/components/app/ScreenFrame";
 import { PublicChrome } from "@/components/public/PublicChrome";
+import { CopyableId } from "@/components/ui/CopyableId";
 import { aliasFromCredentialId, parseStatementRef } from "@/lib/alias";
 import { truncateHex } from "@/lib/chain";
 import { readCredential } from "@/lib/verify";
@@ -99,12 +100,12 @@ async function StatementResult({ id, fresh }: { id: string; fresh: boolean }) {
           revoked ? "border-[color:var(--ev-failed-fg)]" : "border-brand"
         }`}
       >
-        <p className="meta text-ink-faint">
-          {revoked ? "Revoked" : "Valid"}
-          <span className="mx-3 text-rule-strong">·</span>
-          {alias}
-          <span className="mx-3 text-rule-strong">·</span>
-          {shortHex}
+        <p className="meta flex flex-wrap items-center gap-x-3 gap-y-2 text-ink-faint">
+          <span>{revoked ? "Revoked" : "Valid"}</span>
+          <span className="text-rule-strong">·</span>
+          <CopyableId value={alias} />
+          <span className="text-rule-strong">·</span>
+          <CopyableId value={credential.credentialId} display={shortHex} />
         </p>
         <p className="display-md mt-3 text-ink">
           {credential.incomeBand?.label ?? "No range yet"}
