@@ -50,7 +50,7 @@ Orru converts confirmed payment periods into a reusable statement containing:
 The result can support income reviews, credit applications, and fintech
 underwriting while keeping exact pay out of the issued credential.
 
-## Why it is different
+## Verification, not trust
 
 Orru separates discovery from verification:
 
@@ -83,8 +83,8 @@ flowchart LR
     G --> I[Fintech or lender]
 ```
 
-1. A payer sends a stablecoin payment or anchors a payment commitment on
-   Ethereum.
+1. A payer either sends an ERC-20 payment on Ethereum or anchors a commitment to
+   an off-chain payment record there.
 2. A background process finds candidate payments and submits Attestcoin evidence
    to Creditcoin.
 3. The application confirms wallet ownership and reads the already-verified
@@ -100,14 +100,16 @@ flowchart LR
 Stated plainly, because each one does a specific job and none of them is
 decorative.
 
-### Attestcoin — proves the payment happened
+### Attestcoin authenticates the Ethereum evidence
 
 Attestcoin authenticates Ethereum transactions on Creditcoin. Our worker fetches
-a proof bundle for the anchoring transaction from the Attestcoin prover service
-and submits it to `AttestationRegistry`, which calls the **native query verifier
+a proof bundle for the source transaction from the Attestcoin prover service and
+submits it to `AttestationRegistry`, which calls the **native query verifier
 precompile at `0x0000000000000000000000000000000000000FD2`**. The precompile
 checks the transaction against attested Ethereum history and returns the
-authenticated receipt.
+authenticated receipt. For Demo Payroll, that receipt contains the ERC-20
+transfer. For Semuni, it contains the approved payer's commitment and does not
+independently prove an off-chain bank transfer.
 
 Two things the precompile does *not* do, which our contract does on top:
 
@@ -121,19 +123,22 @@ Two things the precompile does *not* do, which our contract does on top:
 Source-chain keys are not EVM chain ids: Ethereum Sepolia is key `1`, mainnet is
 key `3`.
 
-### Zero-knowledge — proves the income band without the amount
+### Zero-knowledge proves the income band without the amount
 
 A Noir circuit takes the three payments' amounts, periods and salts as **private
 witness**, recomputes each `keccak256(abi.encode(recipient, amount, period,
 salt))` commitment, and proves that every amount falls inside one of ten income
 bands and the periods are consecutive. The **public inputs** are the recipient,
-the band, and the three commitments — nothing else.
+the band, and the three commitments. Nothing else.
 
-Proving runs in the user's browser with bb.js in a Web Worker. The amounts never
-leave the machine. A Barretenberg-generated UltraHonk verifier on Creditcoin
-checks the proof on-chain.
+Proving runs in the user's browser with bb.js in a Web Worker, and the private
+witness is never sent to a remote proving service. In the current demo, an
+authenticated Orru route delivers or derives the private slip before the browser
+proves it. Exact amounts and salts are not published on-chain, included in the
+credential or shown to a lender. A Barretenberg-generated UltraHonk verifier on
+Creditcoin checks the proof on-chain.
 
-### Creditcoin — where the statement lives and where money moves
+### Creditcoin is where the statement lives and where money moves
 
 `CredentialRegistry` on Creditcoin issues a statement only when three things hold
 at once: every commitment in the proof's public inputs was accepted by
@@ -143,7 +148,7 @@ authorization. That last check is what stops someone issuing a statement for an
 address they don't control.
 
 `DemoCreditPool` then releases funds against a valid statement. Reads are
-permissionless — anyone can verify a statement with two contract calls and no
+permissionless: anyone can verify a statement with two contract calls and no
 account.
 
 ## What is real and what is simulated
@@ -153,7 +158,7 @@ following are demo stand-ins, and are labelled as such wherever a user sees them
 
 | Thing | Status | Why |
 |---|---|---|
-| **Payments** | Simulated | `DemoPayroll` on Sepolia pays demo workers in **dUSD**, a test token we deployed, once an hour. Circle's testnet faucet gives ~10 USDC per claim, which cannot demonstrate income bands. The transfers are still real ERC-20 transfers in real blocks, and Attestcoin authenticates them identically. |
+| **Payments** | Simulated | `DemoPayroll` on Sepolia pays seven demo workers in **dUSD**, a test token we deployed, once an hour. The transfers are still real ERC-20 transfers in real blocks, and Attestcoin authenticates them identically. Semuni's off-chain payment records are demo data whose commitments are anchored on Ethereum. |
 | **The private payer** | Simulated | **Semuni** is a payer address we control that anchors commitments for off-chain payments. It demonstrates the production model: pay by any rail, anchor only a hash. The salaries it anchors are demo figures. |
 | **The credit pool** | Simulated | `DemoCreditPool` holds **mUSDC**, a test token, and lends 30% of the band floor. No repayment, no interest, no collections. It exists so an approved decision moves real value on-chain. |
 | **The demo faucet** | Simulated | `/try` lets any wallet claim a three-period income history: a payer we control anchors three commitments for that address. This exists so a judge can complete the flow without being on a payroll. |
@@ -161,10 +166,11 @@ following are demo stand-ins, and are labelled as such wherever a user sees them
 | **Proofs** | **Real** | Generated in the browser, verified on-chain by the deployed UltraHonk verifier. |
 | **Statements and payouts** | **Real** | On Creditcoin, readable by anyone, moved by the pool contract. |
 
-The point: what is simulated is the *economics* — who pays whom, and with what.
-What is real is the *verification* — that a payment happened, that a band was
-proven, and that a statement was issued against it without anyone taking anyone's
-word.
+The point: what is simulated is the *economics*: who pays whom, and with what.
+What is real is the *verification path*: Ethereum transaction authentication,
+approved-payer and trusted-source checks, same-commitment binding, the
+zero-knowledge band proof and the Creditcoin statement. For an anchored off-chain
+payment, the initial assertion still comes from the approved payer.
 
 ## Product surfaces
 
@@ -173,6 +179,7 @@ word.
 | Landing | `/` | Product overview and use cases |
 | Waitlist | `/waitlist` | Email signup |
 | Workspace | `/app` | Statement workflow dashboard |
+| Demo faucet | `/try` | Create a three-period test history for any wallet |
 | Connect | `/connect` | Connect and verify the payout account |
 | Review | `/review` | Review confirmed periods and payer evidence |
 | Profile | `/profile` | View the resulting income range |
@@ -181,6 +188,7 @@ word.
 | Public checker | `/check` | Open a statement by short or full ID |
 | Verification | `/verify/[id]` | Read live statement status from Creditcoin |
 | Lender report | `/report/[id]` | Read-only decision and evidence view |
+| Borrow | `/borrow` | Draw testnet mUSDC against a valid statement |
 
 ## Architecture
 
@@ -212,7 +220,8 @@ Sepolia EVM chain ID (`11155111`).
 The Next.js application provides:
 
 - Privy-based wallet authentication;
-- fixture-backed income and proof packages for the current demo flow;
+- live-chain income derivation for Demo Payroll and authenticated private-slip
+  delivery for anchored Semuni records;
 - relayed credential issuance and credit disbursement APIs;
 - live Creditcoin reads for public verification;
 - public lender reports and explicit sharing consent; and
@@ -291,12 +300,17 @@ Copy `.env.example` and configure only the services you need.
 | Wallet authentication | `NEXT_PUBLIC_PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `SESSION_SECRET` |
 | Chain access | `SEPOLIA_RPC_URL`, `CREDITCOIN_RPC_URL` |
 | Relayed writes | `RELAYER_PRIVATE_KEY` |
+| Private Semuni demo slips | `ORRU_SLIP_BOOKS` |
+| Demo faucet | `ORRU_FAUCET_SECRET`, `ORRU_FAUCET_PAYER`, `ORRU_FAUCET_PAYER_KEY` |
+| Browser proving | `PROOF_BUILDER_URL`, `ORRU_COEP`, `NEXT_PUBLIC_ORRU_PREBUILT` |
 | Waitlist webhook | `WAITLIST_WEBHOOK_URL` |
 | Waitlist email | `WAITLIST_NOTIFY_EMAIL`, `RESEND_API_KEY`, `WAITLIST_FROM_EMAIL` |
 | Payroll tooling | `USDC_ADDRESS`, `PAYER_ANCHOR_ADDRESS`, `DEMO_PAYROLL_ADDRESS`, `PAYROLL_OWNER`, `PAYROLL_KEEPER`, `PERIOD_SECONDS`, `SOURCE_CHAIN_KEY` |
 
-Never expose `PRIVY_APP_SECRET`, `SESSION_SECRET`, or `RELAYER_PRIVATE_KEY` to
-client code, logs, documentation, or chat.
+Never expose `PRIVY_APP_SECRET`, `SESSION_SECRET`, `RELAYER_PRIVATE_KEY`,
+`ORRU_SLIP_BOOKS`, `ORRU_FAUCET_SECRET`, or `ORRU_FAUCET_PAYER_KEY` to client
+code, logs, documentation, or chat. `ORRU_FAUCET_SECRET` must remain stable after
+claims are created; changing it makes their private preimages unrecoverable.
 
 ### Build and quality checks
 
@@ -339,12 +353,16 @@ Changing these values requires a complete verifier compatibility test.
 | `POST` | `/api/auth/logout` | Session | Clear the current session |
 | `GET` | `/api/income/[address]` | Session | Read income rows for the authenticated wallet |
 | `GET` | `/api/slips/[address]` | Session | Read private payment-slip input when available |
-| `GET` | `/api/credential/prepare` | Session | Prepare proof data and typed-data fields |
+| `GET`/`POST` | `/api/credential/prepare` | Session | Read a prepared demo or validate browser proof data and prepare typed data |
 | `POST` | `/api/credential/issue` | Session | Relay credential issuance to Creditcoin |
+| `POST` | `/api/faucet/claim` | Session | Anchor a demo income history for the authenticated wallet |
+| `GET` | `/api/faucet/status/[address]` | Session | Read that wallet's anchor and attestation progress |
+| `GET` | `/api/statements/[address]` | Session | Read live statements for the authenticated wallet |
 | `POST` | `/api/share/[requestId]/consent` | Session | Record explicit sharing consent |
 | `GET` | `/api/verify/[id]` | Public | Read public credential status |
 | `GET` | `/api/report/[id]` | Public | Read the lender-facing report |
 | `POST` | `/api/credit/disburse` | Session | Relay a demo credit disbursement |
+| `GET` | `/api/credit/status/[txHash]` | Session | Read the submitted disbursement's receipt status |
 
 ## Live deployments
 
@@ -376,10 +394,10 @@ Both demo tokens use six decimals.
 
 Nobody pays to read a credential.
 
-**Payer integration — the business.** A payroll platform or payout rail adds one
+**Payer integration is the business.** A payroll platform or payout rail adds one
 line to its flow to anchor a commitment per payment. Its workers can then prove
 income anywhere. The payer gains a retention feature, and every worker they pay
-becomes a user. Semuni in the demo is exactly this — it pays off-chain and
+becomes a user. Semuni in the demo is exactly this. It pays off-chain and
 anchors only a hash.
 
 **Underwriting.** "How much can this person safely borrow?" Subscription or
@@ -393,8 +411,9 @@ one they need a key for, and it is the reason the credential lives on Creditcoin
 rather than in our database. We charge the side that gains distribution, never
 the side that would otherwise have to trust us.
 
-**We are not the balance sheet.** Liquidity comes from the payer's own float, a
-depositor pool, or a licensed credit partner. Full detail in `docs/SPEC.md` §11.
+**We are not the balance sheet.** Production liquidity would come from the
+payer's own float, a depositor pool, or a licensed credit partner. The deployed
+pool uses disclosed testnet capital only.
 
 ## Security model
 
@@ -413,34 +432,144 @@ depositor pool, or a licensed credit partner. Full detail in `docs/SPEC.md` §11
 
 ## Current status
 
-All twelve MVP requirements are implemented and proven end to end on live
-testnets:
+The current MVP flow is implemented and proven end to end on live testnets:
 
 - wallet connection and ownership verification;
 - multi-payer income review with per-period evidence links;
 - band-only profile and statement preview;
-- **proof generation in the user's own browser** — bb.js in a Web Worker; the
-  amounts and salts never leave the machine;
+- **proof generation in the user's own browser**: bb.js in a Web Worker; the
+  witness stays inside the browser during proving and is not sent to a proving
+  service;
 - relayed credential issuance with an EIP-712 subject authorization;
 - explicit sharing consent;
 - public statement verification, short aliases, and lender reports;
-- disbursement against a verified statement — real tokens have moved on
+- disbursement against a verified statement; real tokens have moved on
   Creditcoin; and
 - an unattended relay that carries anchored payments to Creditcoin every few
   minutes.
 
 Not built, deliberately:
 
-- a credential revocation interface — revocation exists on the contract and the
+- a credential revocation interface; revocation exists on the contract and the
   public page renders it; there is no screen for it;
-- API keys, metering or billing — the verification endpoint is free and
+- API keys, metering or billing; the verification endpoint is free and
   permissionless, and that is the product working as designed;
-- real capital — the credit pool is disclosed as simulated.
+- real capital; the credit pool is disclosed as simulated;
+- repayment; the pool records what each wallet has drawn and never asks for it
+  back. See the roadmap below for how repayment closes the loop.
+
+Both user paths were walked end to end against the deployed contracts on
+12 September 2026: an existing wallet with payroll and Semuni history issued
+statement `orru:cred:576b974c` and drew 900 mUSDC, and a fresh wallet went
+through the demo faucet to a statement and a draw of its own.
 
 The one timing constraint worth knowing: after a payment is anchored, Attestcoin
 trails Ethereum by roughly seven minutes before it can be relayed, so a freshly
 claimed demo history takes about ten minutes to become provable. That is the
 protocol's cadence, not a queue.
+
+## Testing as a judge
+
+Nothing in the flow costs the tester anything: the demo payer pays Ethereum gas
+and the relayer pays Creditcoin gas. A wallet only ever signs.
+
+There are two ways to test. The prepared wallet is the fastest judge path. The
+demo faucet is open to anyone and shows the complete protocol cadence.
+
+| Path | Wallet | Initial wait | What it demonstrates |
+|---|---|---|---|
+| **Prepared judge wallet** | The wallets and keys provided with the DoraHacks submission | None | Review, browser proof, statement issuance, public verification and borrowing |
+| **Demo faucet** | Use any fresh wallet you control | Usually 10 to 15 minutes | The complete flow, including Ethereum anchoring and Attestcoin confirmation |
+
+### Fast judge path: prepared wallet
+
+The prepared wallets already have three Semuni pay cycles confirmed by
+Attestcoin. Their addresses and private keys are provided with the DoraHacks
+submission. They are testnet accounts holding nothing of value; if one has been
+used before you arrive, take the next one or use the demo faucet.
+
+1. Import the supplied testnet account into MetaMask or Rabby.
+2. Open [orru.xyz/connect](https://orru.xyz/connect), connect it and sign the
+   short ownership message.
+3. Review the confirmed Semuni income history and issue the statement.
+4. Borrow against the statement. The mUSDC arrives in the connected wallet.
+5. Open the public statement page in a private window. It needs no wallet or
+   Orru account.
+
+### Full protocol path: demo faucet
+
+The faucet works with any fresh wallet. It does not send spendable funds on
+Sepolia. Orru's demo payer anchors three recipient-specific income commitments
+in one Sepolia transaction. Attestcoin then confirms those records against
+Ethereum, and the relayer records the accepted commitments on Creditcoin.
+
+1. Open [orru.xyz/try](https://orru.xyz/try) and choose **Create demo history**.
+2. Connect any wallet you control and sign the short ownership message. The
+   wallet needs no ETH, CTC or tokens.
+3. Leave the page open while it checks progress. It shows when Ethereum confirms
+   the transaction, the latest Ethereum block covered by Attestcoin, when the
+   record is ready for Orru's relayer, and when Creditcoin accepts it. The normal
+   wait is 10 to 15 minutes. If it is not ready after 25 minutes, check the
+   latest `attest` workflow under GitHub Actions.
+4. When the wallet has an income history, review Semuni, issue the statement and
+   borrow against it.
+5. Open the public statement page in a private window.
+
+Why the wait exists: Attestcoin normally trails Ethereum by about seven minutes,
+and Orru's relayer runs every five minutes. The page checks every 15 seconds, but
+it cannot make either chain advance sooner. This wait applies only to a fresh
+faucet claim, not to a prepared judge wallet.
+
+**Seeing the mUSDC in your wallet.** MetaMask does not detect tokens on
+Creditcoin testnet, so add it once, on the Creditcoin testnet network:
+
+| Field | Value |
+|---|---|
+| Network | Creditcoin Testnet, chain id `102031`, RPC `https://rpc.cc3-testnet.creditcoin.network`, symbol `CTC`, explorer `https://creditcoin-testnet.blockscout.com` |
+| Token address | `0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d` |
+| Symbol | `mUSDC` |
+| Decimals | `6` |
+
+In MetaMask: Tokens, Import tokens, Custom token, paste the address. Add it on
+the Creditcoin network only; the same address on Sepolia is the payroll contract.
+Token lists live in the wallet app, not in the account key, so an imported
+account starts without it.
+
+<!-- Judge wallets, if they must be listed here rather than in the submission:
+address and private key, one per line. Testnet only. -->
+
+The faucet spends real Sepolia gas from a server-side hot key. Its in-memory
+duplicate guard protects only one process, not every Vercel instance. Before
+long-lived public exposure, add a shared atomic rate limit, bot challenge and
+global daily spend cap, and keep the payer key minimally funded.
+
+## Roadmap
+
+**Repayment.** Today a draw is a one-way transfer: `DemoCreditPool` records it
+per wallet (`drawnBySubject`) and caps it at a share of the band floor. The next
+contract adds `repay(credentialId, amount)`, a due date and a simple fee, paid in
+the same token on Creditcoin. Repayment history then becomes part of what a
+verifier can read: a statement with a draw in arrears says so on its public
+page, and one that was repaid on time says that too. Repayments made on Ethereum
+need no new protocol: a repayment anchored by the payer or the borrower is
+attested by Attestcoin exactly like income is today.
+
+**Creditcoin writability.** Attestcoin's write layer (Creditcoin to Ethereum)
+is not live in this hackathon window. When it ships, two things move out of the
+demo pool and onto the chains where users actually hold money: disbursing on
+Ethereum or Base from a lender's own vault, triggered by an Outbox message that a
+statement is valid; and pushing statement status changes (issued, revoked, in
+arrears) to lender contracts on other chains. The receiver design is already
+fixed in `AGENTS.md`: an adapter between the Inbox and the application, the
+emitter address validated against a trusted set, replay protection left to the
+protocol.
+
+**Ethereum mainnet.** `PayerAnchor` and a second registry set on mainnet
+(source chain key `3`), so real payroll platforms can anchor production
+payments. The verifier, nullifier registry and circuit are reused unchanged.
+
+**Payer SDK.** One package that anchors a commitment per payment and hands the
+worker their slip, so a payout rail integrates in an afternoon.
 
 ## Documentation
 
