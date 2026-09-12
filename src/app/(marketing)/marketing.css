@@ -19,7 +19,7 @@
   font-family: var(--font-mkt-sans), sans-serif;
 }
 
-/* Grain sits behind UI — cards, buttons, and panels stay clean */
+/* Grain sits behind UI; cards, buttons, and panels stay clean */
 .marketing-shell::before,
 .marketing-shell::after {
   position: absolute;
@@ -347,6 +347,23 @@
   margin-top: 2rem;
 }
 
+.mkt-hero__aside {
+  margin-top: 1.4rem;
+  color: var(--mkt-muted);
+  font-size: 0.85rem;
+  letter-spacing: -0.02em;
+}
+
+.mkt-hero__aside a {
+  color: var(--mkt-soft);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.mkt-hero__aside a:hover {
+  color: var(--mkt-white);
+}
+
 .mkt-marquee {
   position: absolute;
   left: 50%;
@@ -472,7 +489,13 @@
   letter-spacing: -0.04em;
 }
 
+.mkt-about__story > p + p {
+  margin-top: 1rem;
+  margin-bottom: 1.75rem;
+}
+
 .mkt-about__stats {
+  margin-top: auto;
   border-top: 1px solid var(--mkt-line);
 }
 

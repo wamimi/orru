@@ -10,8 +10,8 @@ export function SiteFooter() {
             <Lockup height={27} />
           </Link>
           <p>
-            Portable income statements for people paid in stablecoins. Confirmed
-            from chain history, issued with consent, and useful anywhere.
+            Proof of income for people paid in stablecoins. Verified on-chain.
+            Shared on your terms.
           </p>
         </div>
 
@@ -45,7 +45,6 @@ export function SiteFooter() {
 
       <div className="mkt-container mkt-footer__bottom">
         <p>© {new Date().getFullYear()} Orru. All rights reserved.</p>
-        <p>Built for portable, user-controlled credit history.</p>
       </div>
       <div className="mkt-footer__wordmark" aria-hidden="true">Orru</div>
     </footer>

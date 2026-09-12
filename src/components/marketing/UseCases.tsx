@@ -10,23 +10,23 @@ import {
 const useCases = [
   {
     product: "Statements",
-    title: "Income proof, ready to submit",
+    title: "Proof of income, ready to send",
     description:
-      "Turn confirmed stablecoin pay into a portable income statement for visa, rental, or financial reviews. It shows a verified range, recency, and pay cycles—not exact pay.",
+      "For visa, rental, and financial reviews. A verified range, recency, and pay cycles. Never the exact pay.",
     visual: "statement",
   },
   {
     product: "Credit access",
     title: "Borrow against proven income",
     description:
-      "Present confirmed income history when applying for credit. A lender can check the statement directly, then make its own decision on eligibility and terms.",
+      "Show a lender confirmed income history. They check the statement themselves and set their own terms.",
     visual: "credit",
   },
   {
     product: "Credentials",
     title: "Credit rails for fintechs",
     description:
-      "Fintechs and neobanks can request and verify wallet-bound income credentials for users paid in stablecoins—without trusting uploaded PDFs or Orru.",
+      "Fintechs and neobanks verify wallet-bound income credentials for users paid in stablecoins. No uploaded PDFs. No trust in Orru.",
     visual: "credential",
   },
 ] as const;

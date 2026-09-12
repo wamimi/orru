@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { Drop } from "@phosphor-icons/react/dist/ssr";
 import { FaqAccordion } from "@/components/marketing/FaqAccordion";
 import { LandingButton } from "@/components/marketing/LandingButton";
 import { PartnerMarquee } from "@/components/marketing/PartnerMarquee";
@@ -10,9 +12,9 @@ import { UseCases } from "@/components/marketing/UseCases";
 import { howItWorks } from "@/lib/marketing";
 
 export const metadata: Metadata = {
-  title: "Onchain income, made legible to credit",
+  title: "Proof of income from stablecoin pay",
   description:
-    "Turn confirmed stablecoin income into a portable, band-only statement without publishing exact pay.",
+    "Turn stablecoin pay into proof of income a lender can check. Share the range, never the number. Verified on Creditcoin.",
   alternates: { canonical: "/" },
 };
 
@@ -26,13 +28,18 @@ export default function PreviewPage() {
         <div className="mkt-container mkt-hero__content">
           <h1 className="mkt-display mkt-hero__wordmark">Orru</h1>
           <p className="mkt-hero__copy">
-            Onchain income, made legible to credit. Confirm your stablecoin pay
-            history and share the range—not the number.
+            Proof of income from your stablecoin pay. Share the range, never the
+            number. Verified on Creditcoin, so nobody has to take your word for
+            it.
           </p>
           <div className="mkt-hero__actions">
             <LandingButton href="/connect" arrow>Launch app</LandingButton>
             <LandingButton href="#how-it-works" tone="dark">See how it works</LandingButton>
           </div>
+          <p className="mkt-hero__aside">
+            No stablecoin pay yet?{" "}
+            <Link href="/try">Try it with demo income</Link>
+          </p>
         </div>
         <PartnerMarquee />
       </section>
@@ -42,7 +49,7 @@ export default function PreviewPage() {
           <div className="mkt-section-head">
             <SectionTag>About Orru</SectionTag>
             <h2 className="mkt-section-title">
-              The missing layer between stablecoin income and credit.
+              Paid on-chain. Invisible to lenders.
             </h2>
           </div>
 
@@ -58,9 +65,13 @@ export default function PreviewPage() {
 
             <div className="mkt-about__story">
               <p>
-                Millions of people earn across borders, but a wallet full of
-                stablecoin payments still looks like a blank file to most lenders.
-                Orru turns confirmed pay cycles into a compact, portable statement.
+                Millions of people are paid in stablecoins. To most lenders, that
+                wallet is a blank file.
+              </p>
+              <p>
+                Orru turns confirmed pay cycles into one compact statement.
+                Verified against Ethereum on Creditcoin. Checked by anyone,
+                without asking Orru.
               </p>
               <dl className="mkt-about__stats">
                 <div>
@@ -86,7 +97,7 @@ export default function PreviewPage() {
           <div className="mkt-section-head">
             <SectionTag>What Orru does</SectionTag>
             <h2 className="mkt-section-title">
-              From raw payments to a useful statement.
+              From payments to proof.
             </h2>
           </div>
           <ServicesAccordion />
@@ -111,7 +122,7 @@ export default function PreviewPage() {
           <div className="mkt-section-head">
             <SectionTag>How it works</SectionTag>
             <h2 className="mkt-section-title">
-              Three steps. No paid transaction from you.
+              Three steps. Nothing to pay.
             </h2>
           </div>
           <div className="mkt-steps">
@@ -156,15 +167,22 @@ export default function PreviewPage() {
           <div className="mkt-cta__content">
             <SectionTag>Income that can travel</SectionTag>
             <h2 className="mkt-cta__title">
-              Make income legible without revealing the number.
+              Prove your income. Keep your numbers private.
             </h2>
             <p className="mkt-cta__copy">
-              Start with the wallet where you get paid, or check an existing
-              statement in public.
+              Start with the wallet where you get paid. Check a statement. Or use
+              the demo faucet with any wallet you control.
             </p>
             <div className="mkt-hero__actions">
               <LandingButton href="/connect" arrow>Launch app</LandingButton>
               <LandingButton href="/check" tone="dark">Check a statement</LandingButton>
+              <LandingButton
+                href="/try"
+                tone="text"
+                icon={<Drop size={16} weight="fill" aria-hidden="true" />}
+              >
+                Demo faucet
+              </LandingButton>
             </div>
           </div>
         </div>
