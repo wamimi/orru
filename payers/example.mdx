@@ -1,0 +1,76 @@
+---
+title: "Two payer models"
+description: "What an on-chain payer and an off-chain payer each establish."
+---
+
+Both are live and produce the same statement format. The statement identifies its evidence payer, so a lender can distinguish them and apply a payer-specific policy. What each payer publishes could not be more different.
+
+## Semuni: pays off-chain, anchors a commitment
+
+Semuni represents an off-chain payer. Here is the **complete** on-chain record of one three-period testnet batch, anchored in September 2026:
+
+```text
+tx     0xfd96eaf394b69a08fb6a0a080af3de3a034be57cc6cb66deb2b4222c89df1cbf
+from   0x0531203274075Ff79A07000BBDa2B0272C647d01   (Semuni)
+to     0x16EaB9DA91D2AEea1F1138A95E42C37d1D47B7d2   (PayerAnchor)
+value  0 wei
+input  164 bytes
+logs   3 x PaymentAnchored(payer, commitment)
+```
+
+Open the transaction on Etherscan and read the receipt yourself: three commitments, and no recipient, period, amount or salt. Attestcoin authenticates that Semuni anchored those values; it does not prove that a bank transfer settled. A later zero-knowledge proof can bind private preimages to those same accepted commitments and reveal only a band.
+
+<Check>
+  164 bytes, zero value, three hashes. That is the entire cost and the entire disclosure.
+</Check>
+
+## Demo Payroll: pays on-chain
+
+The same system, the opposite choice. Demo Payroll pays in an ERC-20 on Sepolia, so `runPayroll()` emits the transfer, the payment record and the anchor in one transaction, and Attestcoin authenticates the transfer itself, not merely an assertion about it.
+
+The cost is that the amount is public. It is in the `Transfer` log, in the `PaymentMade` event, and readable directly:
+
+```bash
+cast call <payroll> "amountOf(address)(uint256)" <worker>
+# 2500000000
+```
+
+That is not a leak. It is what paying on a public chain means, and it is true of any ERC-20 payroll whether or not Orru exists.
+
+## Side by side
+
+|  | Demo Payroll | Semuni |
+| --- | --- | --- |
+| Rail | ERC-20 on Ethereum | bank transfer |
+| On-chain footprint | transfer, amount, salt, public `amountOf` | one hash per period |
+| Salt | deterministic, derivable | random, secret |
+| Can anyone read the salary from chain data? | **yes, one call** | **no** |
+| Attestcoin authenticates | the transfer receipt | the payer's anchor receipt |
+| Statement produced | band 4, 3 periods | band 6, 3 periods |
+| Same statement format? | yes | yes |
+| Evidence payer visible? | yes | yes |
+
+## Which should you be
+
+**Anchored, almost certainly.** Unless you already pay in an ERC-20 on Ethereum, anchoring is the only option, and it is the better one for your workers, because their salaries stay private.
+
+The transparent model exists here so the whole chain can be audited end to end. It is a demonstration choice, not a recommendation.
+
+## What a judge or auditor can check
+
+Every step is on a public explorer and none of it requires trusting us:
+
+<Steps>
+  <Step title="The anchor on Ethereum">
+    The transaction above, on Etherscan. Three hashes and no private preimage.
+  </Step>
+  <Step title="The Attestcoin verification on Creditcoin">
+    `acceptedByPayer(commitment, payer)` on the attestation registry returns true. The proof was verified by the native precompile, not by us.
+  </Step>
+  <Step title="The statement">
+    `statusOf(credentialId)` returns valid, with the band and the evidence date.
+  </Step>
+  <Step title="The payout">
+    25 mUSDC moved from the credit pool to the worker, against a statement that never carried an amount.
+  </Step>
+</Steps>

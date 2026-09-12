@@ -1,0 +1,135 @@
+---
+title: "Verification API"
+description: "One public endpoint. No key, no account, no rate limit."
+---
+
+<Info>
+  **Public and unauthenticated, on purpose.** Anyone can verify any statement. There is nothing to sign up for and no key to rotate.
+</Info>
+
+## Endpoint
+
+<ParamField path="credentialId" type="string" required>
+  `0x` followed by 64 hex characters. Anything else returns `status: "unknown"`.
+</ParamField>
+
+```bash
+curl https://orru.xyz/api/verify/0x7b6a24eb96a3eaf45f9dd61e5fcf9716ca4ad52a80a1ee09b93518ba150bf026
+```
+
+## Response
+
+```json
+{
+  "credentialId": "0x7b6a24eb96a3eaf45f9dd61e5fcf9716ca4ad52a80a1ee09b93518ba150bf026",
+  "alias": "orru:cred:7b6a24eb",
+  "status": "valid",
+  "issuedAt": "2026-09-06T20:10:45Z",
+  "revokedAt": null,
+  "subjectAddress": "0xf6A48D18DA6072eaDdBF5D2BfB9FE9263dE0b66C",
+  "walletBindingProven": true,
+  "incomeBand": { "id": 4, "label": "$2,500 - $4,000" },
+  "periodsProven": 3,
+  "verificationPeriod": { "from": "2026-09-06", "to": "2026-09-06" },
+  "attestcoinVerifiedFacts": ["payments_occurred", "payer_identity"],
+  "documentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "evidenceEndHeight": 11646342,
+  "evidenceEndDate": "2026-09-06T09:19:00Z",
+  "issuanceTx": null,
+  "revocationTx": null
+}
+```
+
+## Fields
+
+<ResponseField name="status" type='"valid" | "revoked" | "unknown"' required>
+  The only field that decides whether to proceed. A revoked statement still returns a full record. Read this, not the presence of data.
+</ResponseField>
+
+<ResponseField name="alias" type="string | null">
+  The short public reference derived from the credential id, such as `orru:cred:7b6a24eb`. It is null for invalid input.
+</ResponseField>
+
+<ResponseField name="incomeBand" type="object | null">
+  `{ id, label }`. The range the holder proved every payment fell inside. **Never an exact amount.** We do not hold one.
+</ResponseField>
+
+<ResponseField name="periodsProven" type="number">
+  How many consecutive pay cycles the proof covers. Three today.
+</ResponseField>
+
+<ResponseField name="evidenceEndDate" type="string | null">
+  The date of the newest accepted Ethereum evidence record. **This is the field your freshness policy applies to.** Resolved from the Ethereum block in `evidenceEndHeight`.
+</ResponseField>
+
+<ResponseField name="evidenceEndHeight" type="number | null">
+  The Ethereum block containing the newest accepted transfer or anchor. The authoritative value; `evidenceEndDate` is derived from it for convenience.
+</ResponseField>
+
+<ResponseField name="verificationPeriod" type="object | null">
+  A compatibility view of the dated evidence. The registry currently stores only the end height, not the first period's height, so `from` and `to` are both the date derived from `evidenceEndHeight`. Do not interpret it as the full payroll date range.
+</ResponseField>
+
+<ResponseField name="subjectAddress" type="string | null">
+  The wallet the statement belongs to. Proven by signature at issuance, which is what `walletBindingProven` reports.
+</ResponseField>
+
+<ResponseField name="attestcoinVerifiedFacts" type="string[]">
+  Compatibility labels returned by the current API. `payments_occurred` means an accepted source record exists. For an on-chain payer that record includes the transfer; for an off-chain payer it is the approved payer's anchor and does not independently prove bank settlement. The exact expected source and indexed payer are checked before the record is accepted.
+</ResponseField>
+
+<ResponseField name="documentHash" type="string | null">
+  Optional hash of a supporting document supplied at issuance. A valid statement with no document returns the zero `bytes32`; an unknown statement returns null. Orru never holds the document itself.
+</ResponseField>
+
+<ResponseField name="issuanceTx" type="string | null">
+  Reserved for transaction discovery. The current endpoint does not index transaction hashes, so it returns null even for a valid statement.
+</ResponseField>
+
+<ResponseField name="revocationTx" type="string | null">
+  Reserved for transaction discovery. The current endpoint returns null; use the registry and explorer if the transaction hash is required.
+</ResponseField>
+
+## A complete check
+
+```js
+async function check(credentialId, { maxAgeDays = 30, minBand = 0 } = {}) {
+  const res = await fetch(`https://orru.xyz/api/verify/${credentialId}`);
+  if (!res.ok) {
+    return { ok: false, reason: "verification_unavailable", status: res.status };
+  }
+  const s = await res.json();
+
+  // Always first. A revoked statement returns a full, healthy-looking record.
+  if (s.status !== "valid") {
+    return { ok: false, reason: s.status };
+  }
+
+  if (!s.evidenceEndDate || !s.incomeBand) {
+    return { ok: false, reason: "incomplete_statement" };
+  }
+
+  const ageDays = (Date.now() - Date.parse(s.evidenceEndDate)) / 86_400_000;
+  if (ageDays > maxAgeDays) {
+    return { ok: false, reason: "evidence_too_old", ageDays };
+  }
+
+  if (s.incomeBand.id < minBand) {
+    return { ok: false, reason: "band_below_policy", band: s.incomeBand };
+  }
+
+  return { ok: true, band: s.incomeBand, periods: s.periodsProven };
+}
+```
+
+<Note>
+  Rejecting for age is not the same as the statement being false. It attested a real window; that window is simply older than your policy accepts. Say that in your UI, or your users will think the statement is fake.
+</Note>
+
+## Errors
+
+An id that was never issued returns `200` with `status: "unknown"` rather than a `404`. A malformed id also returns that shape. If Creditcoin or the source-height lookup cannot be read, the endpoint returns `502` with `{ "error": "This statement could not be read." }`. Treat that as a failed read, not as an unknown or invalid statement.
+
+## Rate limits and keys
+
+None today. Metering and keys are not built; see [the roadmap](/roadmap). If you plan to depend on the hosted endpoint at volume, read the contract directly instead, which nobody can rate-limit.

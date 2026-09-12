@@ -1,0 +1,55 @@
+{
+  "theme": "mint",
+  "name": "Orru",
+  "description": "Trustless onchain income verification and credit.",
+  "colors": {
+    "primary": "#0D6862",
+    "light": "#4FBDB2",
+    "dark": "#0A524D"
+  },
+  "favicon": "/favicon.svg",
+  "footer": {
+    "socials": {
+      "github": "https://github.com/wamimi/orru"
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Start here",
+            "pages": [
+              "index",
+              "try"
+            ]
+          },
+          {
+            "group": "Verifying a statement",
+            "pages": [
+              "verify/overview",
+              "verify/api",
+              "verify/on-chain"
+            ]
+          },
+          {
+            "group": "For payers",
+            "pages": [
+              "payers/overview",
+              "payers/anchoring",
+              "payers/example"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "attestcoin",
+              "roadmap"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

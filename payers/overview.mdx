@@ -1,0 +1,71 @@
+---
+title: "Becoming a payer"
+description: "How an employer, platform or grant programme makes their payments provable."
+---
+
+Orru turns payment records into income your workers can prove, without a lender having to trust Orru's database or ask you for a fresh employment letter.
+
+What the record proves depends on how you paid. An Ethereum token transfer proves that value moved. An off-chain payer's commitment proves that the approved payer made a timestamped assertion; it does not cryptographically prove a bank transfer.
+
+## Two models
+
+Which one you use depends on one thing: whether the payment itself is on a chain Attestcoin can read.
+
+<CardGroup cols={2}>
+  <Card title="On-chain payment" icon="link">
+    You pay in an ERC-20 on Ethereum. Attestcoin authenticates **the transfer itself**, inside the same receipt as your anchor.
+
+    Strongest claim available. The amount is public, because the transfer is.
+  </Card>
+
+  <Card title="Anchored payment" icon="lock">
+    You pay however you like (bank transfer, another chain, payroll provider) and anchor only a commitment on Ethereum.
+
+    **The amount appears on no chain.** What is authenticated is your attestation.
+  </Card>
+</CardGroup>
+
+<Warning>
+  These prove different things and you should not blur them. On-chain proves money moved. Anchored proves _you said_ money moved, authenticated and timestamped. The second is how payroll verification has always worked, an employer asserting what they paid, but it rests on your identity, not on cryptography alone.
+</Warning>
+
+## What you commit to
+
+<Steps>
+  <Step title="Get approved once">
+    An admin calls `setPayerApproval(yourAddress, true)` on the attestation registry. Until then your events are ignored. This is what stops someone deploying a lookalike contract and minting themselves an income history.
+  </Step>
+  <Step title="Anchor each payment run">
+    One transaction per run, not per worker. Up to 32 commitments per batch.
+  </Step>
+  <Step title="Deliver the slip, if you anchor">
+    For anchored payments, the worker needs `{ amount, period, salt }` to build their proof. Deliver it through a channel appropriate for payslip data and never publish it. On-chain payers can derive the same values from public contract data instead.
+  </Step>
+</Steps>
+
+That is the whole chain integration. A production payer can deliver slips directly to its workers; Orru's current testnet demo also supports authenticated server delivery so judges can complete the flow without a payroll portal.
+
+## What you never do
+
+- **Vouch for a person.** You record a payment. Whether that qualifies someone for credit is the lender's decision.
+- **Hold their credential.** It belongs to the worker's wallet and they authorize its issuance themselves.
+- **See who verified it.** You do not learn that a worker applied for anything.
+- **Pay for verification.** Reads are free and permissionless.
+
+## The identity rule that matters
+
+The payer is taken from `topics[1]` of the anchoring event, the `msg.sender` that called the anchor, and **never the transaction's `from`**.
+
+<Note>
+  If you anchor through a relayer, a multisig, a smart account or an EIP-7702 delegation, the gas payer differs from you. Reading `from` would attribute your workers' income to whoever paid gas. It is silent when it happens and it looks like a registry bug. Orru reads `topics[1]`.
+</Note>
+
+## Cost
+
+One anchor transaction per payroll run on Ethereum. Batched, so a run of thirty workers is one transaction carrying thirty 32-byte hashes.
+
+<Info>
+  Verification cost rises with event age, roughly tenfold after 24 hours. Anchor promptly, and have whatever relays your anchors run at least daily.
+</Info>
+
+Next: [anchoring a payment](/payers/anchoring), or the [worked example](/payers/example) using a real payer running today.
