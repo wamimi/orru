@@ -396,6 +396,20 @@
   letter-spacing: -0.055em;
 }
 
+.mkt-partner-mark {
+  flex: 0 0 auto;
+  width: auto;
+  opacity: 0.52;
+}
+
+.mkt-partner-mark--creditcoin {
+  height: 1.8rem;
+}
+
+.mkt-partner-mark--noir {
+  height: 1.9rem;
+}
+
 @keyframes mkt-marquee {
   to {
     transform: translateX(-50%);
