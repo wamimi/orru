@@ -5,7 +5,7 @@ description: "The commitment, the transaction, and the one encoding you must not
 
 ## The contract
 
-`PayerAnchor` on Ethereum Sepolia. Unowned, immutable, permissionless — anyone
+`PayerAnchor` on Ethereum Sepolia. Unowned, immutable, permissionless: anyone
 can call it, and nobody can upgrade it. It is a trust root, so it has no admin
 to compromise.
 
@@ -42,7 +42,7 @@ looks unrelated.
 
 <ParamField path="amount" type="uint256" required>
   Base units of a six-decimal token. **$2,500 is `2500000000`.** Must fit in a
-  `uint64` — the circuit holds it as one.
+  `uint64`; the circuit holds it as one.
 </ParamField>
 
 <ParamField path="period" type="uint256" required>
@@ -58,8 +58,8 @@ looks unrelated.
 ## The salt decides your privacy
 
 <Tabs>
-  <Tab title="Random and secret — recommended">
-    32 bytes from a CSPRNG, kept by you and delivered to the worker off-chain.
+  <Tab title="Random and secret (recommended)">
+    32 bytes from a CSPRNG, kept by the payer and worker and never published.
 
     The commitment is then **hiding**: nobody can recover the amount from it,
     because they cannot guess the salt.
@@ -70,11 +70,11 @@ looks unrelated.
     ```
 
     <Warning>
-    You are the only holder. Lose it and that payment can never be proven —
-    there is no recovery, by design.
+    If every holder loses it, that payment can never be proven. There is no
+    on-chain recovery, by design.
     </Warning>
   </Tab>
-  <Tab title="Deterministic — on-chain payers only">
+  <Tab title="Deterministic (on-chain payers only)">
     Derived from public values, e.g. `keccak256(abi.encode(payroll, recipient, period))`.
 
     The worker can recompute it without an off-chain channel, which is
@@ -82,7 +82,7 @@ looks unrelated.
     hiding**: anyone can brute-force the amount over a few thousand plausible
     salaries.
 
-    Only reasonable when the amount is public anyway — which it is if you paid
+    Only reasonable when the amount is public anyway, which it is if you paid
     in an ERC-20 on a public chain.
     </Tab>
 </Tabs>
@@ -123,32 +123,41 @@ the same commitment.
 
 ## Delivering the slip
 
-If you used a random salt, the worker needs this to prove anything:
+If you used a random salt, the worker needs the recipient, amount, period, salt
+and commitment to prove anything. Treat that complete record as payslip data and
+never publish a real preimage in documentation, source control or logs.
+
+The shape of a slip, with made-up values. Nothing below is anchored anywhere;
+the commitment is what `shared/commitment.ts` returns for these inputs, so you
+can recompute it to check the encoding:
 
 ```json
 {
-  "recipient": "0xBb605cf7604ef843e9Df15559257a73989DAe75A",
-  "amount":    "7500000000",
-  "period":    "3",
-  "salt":      "0xcf67dfc5a2ca49d9a44b0fc4edfbb46c8799f6af61f04d45822de811793f652a",
-  "commitment":"0xe8bd1d0502da34112ea376503b75173b9b9fd2958534de181f7e5454ed518783"
+  "recipient": "0x1111111111111111111111111111111111111111",
+  "amount":    "4200000000",
+  "period":    "12",
+  "salt":      "0x3b113115dd87ab2de1362a6c46f2702f7b5fced1d8484d748ba297b78c75dcda",
+  "commitment":"0x892251be06412224f4c20996dac6b45ab4a387fe4355d14f03dae5e4f014cf85"
 }
 ```
 
-Any channel you already trust for payslips — the portal they log into, an
+Any channel you already trust for payslips: the portal they log into, an
 encrypted export, your existing HR system. It is the same sensitivity as a
 payslip, because that is what it is.
 
 <Note>
-The slip never touches Orru. It goes from you to the worker, and from the worker
-into their browser when they build a proof. If it reaches a server, the privacy
-property is gone.
+Direct payer-to-worker delivery gives the strongest privacy because Orru never
+sees the preimage. In the current testnet demo, an authenticated Orru route may
+deliver or derive the demo slip for the connected wallet. The exact amount and
+salt are still never published on-chain, placed in the credential, shown to a
+lender or sent to a remote proving service, but the demo does not hide them from
+the Orru server.
 </Note>
 
 ## Then what
 
 A relayer picks up your `PaymentAnchored` event, waits for the block to be
-attested, and submits the Attestcoin proof to Creditcoin — typically within
+attested, and submits the Attestcoin proof to Creditcoin, typically within
 minutes. After that the worker can build a proof and issue a statement whenever
 they like.
 

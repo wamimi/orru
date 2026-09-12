@@ -1,0 +1,40 @@
+---
+title: "Roadmap and limits"
+description: "What is deliberately simulated today and what comes next."
+---
+
+Orru's verification path is live on public testnets. The payment figures, payer
+businesses and credit capital are demo economics. A statement is evidence of a
+dated past window; it is not a promise of future income, affordability, legal
+eligibility or repayment.
+
+## Repayment
+
+Today `DemoCreditPool` records each wallet's draw and caps it at a share of the
+band floor, but it does not collect repayment, interest or fees. A production
+credit product needs repayment state, due dates, lender policy and the relevant
+licensing and consumer-protection controls.
+
+## Creditcoin writability
+
+During the current testnet demo, Creditcoin is the destination for Attestcoin
+verification, statements and demo lending. Creditcoin-to-client-chain messaging
+is not a live dependency. When the write layer is available, a lender could use
+it to trigger a disbursement from its own vault on another programmable chain.
+
+That receiver must still validate the Creditcoin emitter, handle unordered
+delivery and guard against reentrancy. Protocol replay protection does not make
+an untrusted application receiver safe by itself.
+
+## Production payer integration
+
+An Ethereum-mainnet anchor and payer SDK would let payroll platforms create the
+same commitment per payment and deliver the private slip directly to the worker.
+The zero-knowledge circuit and statement verifier do not need exact salaries to
+be published.
+
+## Hosted API
+
+Public verification remains permissionless on-chain. The hosted Orru endpoint
+currently has no API keys, billing or service-level guarantee; integrations that
+need maximum availability can read `CredentialRegistry` directly.

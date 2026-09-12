@@ -71,7 +71,7 @@ const credential = await client.readContract({
 
 ## Bands
 
-`band` is an index. The table is fixed — it is compiled into the zero-knowledge
+`band` is an index. The table is fixed: it is compiled into the zero-knowledge
 circuit, so changing it would mean regenerating and redeploying the verifier.
 
 | id | Range | id | Range |
@@ -83,8 +83,8 @@ circuit, so changing it would mean regenerating and redeploying the verifier.
 | 4 | $2,500 – $4,000 | 9 | $25,000+ |
 
 Bands are spaced multiplicatively rather than evenly, because income is roughly
-log-normal. Even steps are too coarse at the bottom — a single `$0–1,000` treats
-$50 and $999 alike — and too wide at the top. What is held constant is relative
+log-normal. Even steps are too coarse at the bottom (a single `$0–1,000` treats
+$50 and $999 alike) and too wide at the top. What is held constant is relative
 width, 50–67% per band, which is how much the band narrows your uncertainty.
 
 ## Going deeper
