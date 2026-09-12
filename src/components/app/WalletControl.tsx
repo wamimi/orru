@@ -1,15 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  useLogin,
-  usePrivy,
-  useSignMessage,
-  useWallets,
-} from "@privy-io/react-auth";
+import { useLogin, useModalStatus, usePrivy, useWallets } from "@privy-io/react-auth";
 import { Check, SignOut, Wallet } from "@phosphor-icons/react";
 import { useFlowSession } from "@/components/app/useFlowSession";
+import { useLinkedWallet } from "@/components/app/useLinkedWallet";
 import { truncateAddress } from "@/lib/app";
+import { forgetSite, signMessageWith, signingProblem, withLimit } from "@/lib/wallet-sign";
 
 const privyConfigured = Boolean(process.env.NEXT_PUBLIC_PRIVY_APP_ID);
 
@@ -26,70 +23,114 @@ export function WalletControl() {
 
 function LiveWalletControl() {
   const { session, update, clear } = useFlowSession();
-  const { ready, authenticated, logout, user } = usePrivy();
+  const { ready, authenticated, logout } = usePrivy();
   const { wallets } = useWallets();
-  const { signMessage } = useSignMessage();
+  const { wallet, ready: walletsReady } = useLinkedWallet();
+  const { isOpen: modalOpen } = useModalStatus();
   const [working, setWorking] = useState<"idle" | "connecting" | "signing">("idle");
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A login restored by the wallet library is not adopted on its own; the
+  // user connects in this tab, or continues a session this tab already has.
+  const [chosen, setChosen] = useState(false);
   const { login } = useLogin({
-    onComplete: () => setWorking("idle"),
+    onComplete: ({ wasAlreadyAuthenticated }) => {
+      setWorking("idle");
+      if (wasAlreadyAuthenticated) {
+        setError("Still signed in to the previous wallet. Reload the page and try again.");
+        return;
+      }
+      setChosen(true);
+    },
     onError: () => {
       setWorking("idle");
       setError("Wallet connection was not completed.");
     },
   });
 
-  const wallet = wallets.find((item) => item.address);
-  const address = wallet?.address ?? user?.wallet?.address ?? session.address;
+  const address = wallet?.address ?? null;
+  const live = ready && authenticated && address !== null && (chosen || session.connected);
 
   useEffect(() => {
-    if (!ready || !authenticated || !address) return;
-    if (
-      session.connected &&
-      session.address?.toLowerCase() === address.toLowerCase()
-    ) {
-      return;
-    }
+    if (!live || !address) return;
+    const same = session.address?.toLowerCase() === address.toLowerCase();
+    if (session.connected && same) return;
     const frame = requestAnimationFrame(() => {
       update({
         address,
         connected: true,
-        signed:
-          session.address?.toLowerCase() === address.toLowerCase()
-            ? session.signed
-            : false,
-        income:
-          session.address?.toLowerCase() === address.toLowerCase()
-            ? session.income
-            : null,
+        signed: same ? session.signed : false,
+        sessionToken: same ? session.sessionToken : null,
+        income: same ? session.income : null,
       });
     });
     return () => cancelAnimationFrame(frame);
   }, [
+    live,
     address,
-    authenticated,
-    ready,
     session.address,
     session.connected,
     session.income,
+    session.sessionToken,
     session.signed,
     update,
   ]);
 
+  // A stored login that no longer matches this tab's session, or a session
+  // whose wallet is gone, is dropped so no screen shows a stale address.
+  useEffect(() => {
+    if (!ready || !session.connected) return;
+    if (!authenticated) {
+      clear();
+      return;
+    }
+    if (!walletsReady || wallet) return;
+    const timer = setTimeout(() => clear(), 4_000);
+    return () => clearTimeout(timer);
+  }, [ready, authenticated, walletsReady, wallet, session.connected, clear]);
+
+  // The wallet library opens no modal while a stored login is still being
+  // torn down; a connect that shows nothing is reset instead of spinning.
+  useEffect(() => {
+    if (working !== "connecting" || modalOpen) return;
+    const timer = setTimeout(() => {
+      setWorking("idle");
+      setError("The wallet picker did not open. Try again.");
+    }, 8_000);
+    return () => clearTimeout(timer);
+  }, [working, modalOpen]);
+
+  // Forgets the site in every connected wallet, so the next connection asks
+  // which account to use instead of reusing the last one. Bounded: a wallet
+  // that never answers must not block the next step.
+  async function forget() {
+    await Promise.all(wallets.map(forgetSite));
+    try {
+      await withLimit(logout(), 3_000, undefined);
+    } catch {
+      /* cleared locally regardless */
+    }
+  }
+
   async function connect() {
     setError(null);
     setWorking("connecting");
-    login({ loginMethods: ["wallet"] });
+    if (authenticated) await forget();
+    try {
+      login({ loginMethods: ["wallet"] });
+    } catch {
+      setWorking("idle");
+      setError("Wallet connection was not completed.");
+    }
   }
 
   async function verifyOwnership() {
-    if (!address) return;
+    if (!wallet) return;
     setError(null);
     setWorking("signing");
     try {
       const challengeResponse = await fetch(
-        `/api/auth/challenge?address=${address}`,
+        `/api/auth/challenge?address=${wallet.address}`,
       );
       const challenge = (await challengeResponse.json()) as {
         message?: string;
@@ -104,19 +145,13 @@ function LiveWalletControl() {
         throw new Error(challenge.error ?? "Could not prepare the ownership check.");
       }
 
-      const { signature } = await signMessage(
-        { message: challenge.message },
-        {
-          address,
-          uiOptions: { title: "Confirm this payout account" },
-        },
-      );
+      const signature = await signMessageWith(wallet, challenge.message);
       const verifyResponse = await fetch("/api/auth/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          address,
+          address: wallet.address,
           signature,
           challenge: challenge.challenge,
         }),
@@ -129,18 +164,14 @@ function LiveWalletControl() {
         throw new Error(verified.error ?? "The ownership check did not complete.");
       }
       update({
-        address,
+        address: wallet.address,
         connected: true,
         signed: true,
         sessionToken: verified.sessionToken,
         income: null,
       });
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "The ownership check did not complete.",
-      );
+      setError(signingProblem(cause));
     } finally {
       setWorking("idle");
     }
@@ -148,11 +179,8 @@ function LiveWalletControl() {
 
   async function disconnect() {
     setOpen(false);
-    try {
-      await logout();
-    } catch {
-      /* session is still cleared locally */
-    }
+    setChosen(false);
+    await forget();
     try {
       await fetch("/api/auth/logout", {
         method: "POST",
@@ -168,7 +196,9 @@ function LiveWalletControl() {
     return <span className="wallet-control wallet-control--disabled">Loading…</span>;
   }
 
-  if (!authenticated || !address) {
+  if (!live) {
+    const switched =
+      authenticated && walletsReady && !wallet && session.connected && session.address;
     return (
       <div className="wallet-control-wrap">
         <button
@@ -178,9 +208,20 @@ function LiveWalletControl() {
           disabled={working !== "idle"}
         >
           <Wallet size={16} />
-          {working === "connecting" ? "Connecting…" : "Connect wallet"}
+          {working === "connecting"
+            ? "Connecting…"
+            : switched
+              ? "Reconnect wallet"
+              : "Connect wallet"}
         </button>
-        {error ? <p className="wallet-control__error">{error}</p> : null}
+        {error ? (
+          <p className="wallet-control__error">{error}</p>
+        ) : switched ? (
+          <p className="wallet-control__error">
+            Your wallet no longer shows {truncateAddress(session.address as string)}.
+            Reconnect and choose the account to use.
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -211,7 +252,7 @@ function LiveWalletControl() {
         onClick={() => setOpen((value) => !value)}
       >
         <span className="wallet-control__dot" />
-        <span>{truncateAddress(address)}</span>
+        <span>{truncateAddress(address as string)}</span>
         <Check size={14} weight="bold" />
       </button>
       {open ? (
