@@ -116,10 +116,10 @@ export default function BrandPage() {
           <p className="display-md text-ink">Display md</p>
           <p className="display-sm text-ink">Display sm</p>
           <p className="text-base text-ink-soft">
-            Body — Instrument Sans at 1rem, 1.6 line height.
+            Body: Instrument Sans at 1rem, 1.6 line height.
           </p>
-          <p className="meta text-ink">meta — JetBrains Mono 0.75rem</p>
-          <p className="eyebrow text-ink-faint">Eyebrow — uppercase tracked</p>
+          <p className="meta text-ink">meta: JetBrains Mono 0.75rem</p>
+          <p className="eyebrow text-ink-faint">Eyebrow: uppercase tracked</p>
         </div>
       </Row>
 

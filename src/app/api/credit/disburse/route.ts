@@ -105,6 +105,7 @@ export async function POST(request: NextRequest) {
       amount: amount.toString(),
       remaining: left.toString(),
       txHash,
+      blockNumber: receipt.blockNumber.toString(),
     });
   } catch (error) {
     return NextResponse.json({ error: friendlyError(error) }, { status: 400 });

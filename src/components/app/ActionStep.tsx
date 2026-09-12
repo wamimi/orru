@@ -17,7 +17,7 @@ export function ActionStep({
 }) {
   return (
     <div
-      className={`flex flex-col gap-6 border-t-2 pt-6 transition-tone md:flex-row md:items-end md:justify-between md:gap-10 md:pt-8 ${
+      className={`product-action-step flex flex-col gap-6 border-t-2 pt-6 transition-tone md:flex-row md:items-end md:justify-between md:gap-10 md:pt-8 ${
         complete ? "border-brand" : "border-rule-strong"
       }`}
     >

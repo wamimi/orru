@@ -6,8 +6,8 @@ export { splitLimbs, toNoirInputs } from "./witness"
 /**
  * Generates the income proof in a Web Worker.
  *
- * Proving stays on the user's machine on purpose. The witness — the actual
- * amounts and the salts — is what the proof exists to keep private, so it must
+ * Proving stays on the user's machine on purpose. The witness (the actual
+ * amounts and the salts) is what the proof exists to keep private, so it must
  * never be sent anywhere. A server-side prover would work and would be faster,
  * and it would make the product's central claim false.
  *

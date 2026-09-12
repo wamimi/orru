@@ -6,7 +6,7 @@ export const demoCredential: IssuedCredential = {
   policyVersion: "orru-income-v1",
   issuedAt: "12 Aug 2026",
   expiresAt: "12 Nov 2026",
-  issuanceRef: "ctc:cred:8f41c2a7",
+  issuanceRef: "Example",
 };
 
 export const sharedWithLender = [

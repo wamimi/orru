@@ -1,12 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ArrowSquareOut } from "@phosphor-icons/react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowSquareOut, CheckCircle } from "@phosphor-icons/react";
 import { Callout } from "@/components/app/Callout";
 import { ScreenFrame } from "@/components/app/ScreenFrame";
 import { useFlowSession } from "@/components/app/useFlowSession";
 import { Button, ButtonLink } from "@/components/ui/Button";
-import { creditcoinTxUrl, truncateHex } from "@/lib/chain";
+import {
+  ADDRESSES,
+  CREDITCOIN_ID,
+  TOKEN_DECIMALS,
+  creditcoinTxUrl,
+  truncateHex,
+} from "@/lib/chain";
 import type { Statement, StatementsPayload } from "@/lib/statements";
 
 const UNITS = 1_000_000;
@@ -25,6 +31,21 @@ function toBase(input: string): bigint {
   return BigInt(whole || "0") * BigInt(UNITS) + BigInt(micros);
 }
 
+async function readStatements(
+  address: string,
+  sessionToken: string,
+  fresh = false,
+): Promise<StatementsPayload> {
+  const response = await fetch(`/api/statements/${address}${fresh ? "?fresh=1" : ""}`, {
+    credentials: "include",
+    headers: { Authorization: `Bearer ${sessionToken}` },
+    cache: "no-store",
+  });
+  if (response.status === 401) throw new Error("expired");
+  if (!response.ok) throw new Error("lookup");
+  return (await response.json()) as StatementsPayload;
+}
+
 export function BorrowScreen() {
   const { session, ready } = useFlowSession();
   const [data, setData] = useState<StatementsPayload | null>(null);
@@ -32,25 +53,33 @@ export function BorrowScreen() {
   const [amount, setAmount] = useState("");
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [paid, setPaid] = useState<{ amount: string; txHash: string } | null>(null);
-  const [pending, setPending] = useState<{ amount: string; txHash: string } | null>(null);
+  const [paid, setPaid] = useState<{
+    amount: string;
+    txHash: string;
+    blockNumber: string;
+  } | null>(null);
+  const [pending, setPending] = useState<{
+    amount: string;
+    txHash: string;
+    credentialId: string;
+  } | null>(null);
 
   const signedOut =
     (ready && (!session.address || !session.sessionToken)) || failed === "expired";
   const loading = !signedOut && !data && !failed;
 
+  const refreshStatements = useCallback(async () => {
+    if (!session.address || !session.sessionToken) return null;
+    const payload = await readStatements(session.address, session.sessionToken, true);
+    setData(payload);
+    setFailed(null);
+    return payload;
+  }, [session.address, session.sessionToken]);
+
   useEffect(() => {
     if (!ready || !session.address || !session.sessionToken) return;
     let cancelled = false;
-    fetch(`/api/statements/${session.address}`, {
-      credentials: "include",
-      headers: { Authorization: `Bearer ${session.sessionToken}` },
-    })
-      .then(async (response) => {
-        if (response.status === 401) throw new Error("expired");
-        if (!response.ok) throw new Error("lookup");
-        return (await response.json()) as StatementsPayload;
-      })
+    readStatements(session.address, session.sessionToken)
       .then((payload) => {
         if (!cancelled) setData(payload);
       })
@@ -63,14 +92,110 @@ export function BorrowScreen() {
     };
   }, [ready, session.address, session.sessionToken]);
 
+  const applyConfirmedDraw = useCallback(
+    (credentialId: string, amountBase: string, remainingBase?: string) => {
+      setData((current) => {
+        if (!current) return current;
+        const amountValue = BigInt(amountBase);
+        const drawn = BigInt(current.credit.drawn) + amountValue;
+        return {
+          ...current,
+          statements: current.statements.map((row) => {
+            if (row.credentialId.toLowerCase() !== credentialId.toLowerCase()) return row;
+            const remaining = remainingBase
+              ? BigInt(remainingBase)
+              : BigInt(row.remaining) > amountValue
+                ? BigInt(row.remaining) - amountValue
+                : 0n;
+            return { ...row, remaining: remaining.toString() };
+          }),
+          credit: {
+            ...current.credit,
+            drawn: drawn.toString(),
+            drawnFormatted: money(drawn).replace(/,/g, ""),
+          },
+        };
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!pending || !session.sessionToken) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const check = async () => {
+      try {
+        const response = await fetch(
+          `/api/credit/status/${encodeURIComponent(pending.txHash)}`,
+          {
+            credentials: "include",
+            headers: { Authorization: `Bearer ${session.sessionToken}` },
+            cache: "no-store",
+          },
+        );
+        const body = (await response.json()) as {
+          status?: string;
+          blockNumber?: string;
+          error?: string;
+        };
+        if (cancelled) return;
+
+        if (body.status === "confirmed" && body.blockNumber) {
+          applyConfirmedDraw(pending.credentialId, pending.amount);
+          setPaid({
+            amount: pending.amount,
+            txHash: pending.txHash,
+            blockNumber: body.blockNumber,
+          });
+          setPending(null);
+          try {
+            await refreshStatements();
+          } catch {
+            setError("The transfer arrived, but the available amount could not be refreshed.");
+          }
+          return;
+        }
+
+        if (body.status === "failed") {
+          setPending(null);
+          setError("The transfer did not complete. Please try again.");
+          return;
+        }
+
+        if (response.status === 401) {
+          setPending(null);
+          setFailed("expired");
+          return;
+        }
+      } catch {
+        if (cancelled) return;
+      }
+      timer = setTimeout(() => void check(), 3_000);
+    };
+
+    timer = setTimeout(() => void check(), 3_000);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [applyConfirmedDraw, pending, refreshStatements, session.sessionToken]);
+
   const statement: Statement | null = useMemo(() => {
     const live = (data?.statements ?? []).filter(
-      (row) => row.status === "valid" && BigInt(row.remaining) > 0n,
+      (row) => row.status === "valid",
     );
     return live.sort((a, b) => Number(b.remaining) - Number(a.remaining))[0] ?? null;
   }, [data]);
 
   const headroom = statement ? BigInt(statement.remaining) : 0n;
+  const limit = statement ? BigInt(statement.limit) : 0n;
+  const drawn = data ? BigInt(data.credit.drawn) : 0n;
+  const drawnPercent = limit > 0n
+    ? Math.min(100, Number((drawn * 10_000n) / limit) / 100)
+    : 0;
+  const allDrawn = Boolean(statement) && headroom === 0n;
   const wanted = toBase(amount);
   const tooMuch = wanted > headroom;
   const canSend =
@@ -98,33 +223,33 @@ export function BorrowScreen() {
         amount?: string;
         remaining?: string;
         txHash?: string;
+        blockNumber?: string;
         error?: string;
       };
 
       if (response.status === 202 && body.txHash) {
-        setPending({ amount: body.amount ?? wanted.toString(), txHash: body.txHash });
+        setPending({
+          amount: body.amount ?? wanted.toString(),
+          txHash: body.txHash,
+          credentialId: statement.credentialId,
+        });
         setAmount("");
         return;
       }
 
-      if (!response.ok || !body.txHash) {
+      if (!response.ok || !body.txHash || !body.blockNumber) {
         setError(body.error ?? "That could not be sent. Please try again.");
         return;
       }
-      setPaid({ amount: body.amount ?? wanted.toString(), txHash: body.txHash });
-      setData((current) =>
-        current
-          ? {
-              ...current,
-              statements: current.statements.map((row) =>
-                row.credentialId === statement.credentialId
-                  ? { ...row, remaining: body.remaining ?? "0" }
-                  : row,
-              ),
-            }
-          : current,
-      );
+      const paidAmount = body.amount ?? wanted.toString();
+      applyConfirmedDraw(statement.credentialId, paidAmount, body.remaining);
+      setPaid({ amount: paidAmount, txHash: body.txHash, blockNumber: body.blockNumber });
       setAmount("");
+      try {
+        await refreshStatements();
+      } catch {
+        setError("The transfer arrived, but the available amount could not be refreshed.");
+      }
     } catch {
       setError("That could not be sent. Please try again.");
     } finally {
@@ -194,7 +319,7 @@ export function BorrowScreen() {
               autoComplete="off"
               placeholder="0"
               value={amount}
-              disabled={loading || working}
+              disabled={loading || working || allDrawn || Boolean(pending)}
               onChange={(event) => setAmount(event.target.value)}
               className="display-lg w-full min-w-0 bg-transparent text-ink outline-none placeholder:text-ink-faint"
             />
@@ -210,7 +335,7 @@ export function BorrowScreen() {
               <button
                 key={quick.label}
                 type="button"
-                disabled={loading || headroom === 0n}
+                disabled={loading || working || headroom === 0n || Boolean(pending)}
                 onClick={() => setAmount(money(quick.value).replace(/,/g, ""))}
                 className="meta min-h-9 rounded-control border border-rule px-3 text-ink-soft transition-tone hover:border-ink-faint hover:text-ink disabled:opacity-40"
               >
@@ -225,6 +350,12 @@ export function BorrowScreen() {
             </p>
           ) : null}
 
+          {allDrawn ? (
+            <p className="meta mt-4 text-ink-faint">
+              You have drawn everything available against this statement.
+            </p>
+          ) : null}
+
           {error ? (
             <div className="mt-6">
               <Callout tone="error" title="That did not go through" body={error} />
@@ -236,17 +367,18 @@ export function BorrowScreen() {
               <Callout
                 tone="info"
                 title={`${money(BigInt(pending.amount))} mUSDC is on its way`}
-                body="The chain is taking longer than usual to confirm. It has been sent — do not send it again. Follow the confirmation to watch it land."
+                body="The chain is taking longer than usual to confirm. It has been sent. Do not send it again. Follow the confirmation to watch it land."
               >
-                <a
+                <ButtonLink
                   href={creditcoinTxUrl(pending.txHash)}
                   target="_blank"
                   rel="noreferrer"
-                  className="meta mt-4 inline-flex items-center gap-1.5 text-brand hover:text-brand-hover"
+                  className="mt-4"
+                  variant="outline"
                 >
                   Follow the chain confirmation
-                  <ArrowSquareOut size={14} />
-                </a>
+                  <ArrowSquareOut size={16} />
+                </ButtonLink>
               </Callout>
             </div>
           ) : null}
@@ -255,18 +387,35 @@ export function BorrowScreen() {
             <div className="mt-6">
               <Callout
                 tone="info"
-                title={`${money(BigInt(paid.amount))} mUSDC is on its way`}
-                body="It was sent to the payout account you connected. Nothing was locked and nothing was sold."
+                title={`${money(BigInt(paid.amount))} mUSDC has arrived in your wallet`}
+                body={`Confirmed on Creditcoin in block ${paid.blockNumber}. Nothing was locked and nothing was sold.`}
               >
-                <a
+                <div className="mt-5 flex gap-3 rounded-control border border-rule bg-paper p-4">
+                  <CheckCircle
+                    size={28}
+                    weight="fill"
+                    className="borrow-success__icon shrink-0 text-brand"
+                  />
+                  <div>
+                    <p className="font-medium text-ink">Check your wallet</p>
+                    <p className="mt-1 break-all text-sm leading-relaxed text-ink-soft">
+                      mUSDC at {ADDRESSES[CREDITCOIN_ID].settlementToken}
+                    </p>
+                    <p className="meta mt-1 text-ink-faint">
+                      {TOKEN_DECIMALS} decimals. Creditcoin testnet, chain id {CREDITCOIN_ID}.
+                    </p>
+                  </div>
+                </div>
+                <ButtonLink
                   href={creditcoinTxUrl(paid.txHash)}
                   target="_blank"
                   rel="noreferrer"
-                  className="meta mt-4 inline-flex items-center gap-1.5 text-brand hover:text-brand-hover"
+                  className="mt-4"
+                  variant="outline"
                 >
                   Open the chain confirmation
-                  <ArrowSquareOut size={14} />
-                </a>
+                  <ArrowSquareOut size={16} />
+                </ButtonLink>
               </Callout>
             </div>
           ) : null}
@@ -284,19 +433,33 @@ export function BorrowScreen() {
         <aside className="border-t-2 border-brand pt-6">
           <p className="eyebrow text-ink-faint">Available to draw</p>
           <p className="display-md mt-3 text-ink">
-            {loading ? "—" : `${money(headroom)} mUSDC`}
+            {loading ? "Loading" : `${money(headroom)} mUSDC`}
           </p>
 
           {statement ? (
-            <dl className="mt-8 border-t border-rule">
-              <Row label="Against" value={statement.bandLabel} />
-              <Row label="Statement" value={truncateHex(statement.credentialId)} />
-              <Row label="Pay cycles" value={`${statement.periodsProven}`} />
-              <Row
-                label="Already drawn"
-                value={`${data?.credit.drawnFormatted ?? "0"} mUSDC`}
-              />
-            </dl>
+            <>
+              <p className="mt-4 text-sm leading-relaxed text-ink-soft">
+                Limit {money(limit)} mUSDC. Drawn {money(drawn)}. Remaining {money(headroom)}.
+              </p>
+              <div
+                className="borrow-progress mt-4"
+                role="progressbar"
+                aria-label="Amount drawn"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(drawnPercent)}
+              >
+                <span
+                  className="borrow-progress__fill"
+                  style={{ width: `${drawnPercent}%` }}
+                />
+              </div>
+              <dl className="mt-8 border-t border-rule">
+                <Row label="Against" value={statement.bandLabel} />
+                <Row label="Statement" value={truncateHex(statement.credentialId)} />
+                <Row label="Pay cycles" value={`${statement.periodsProven}`} />
+              </dl>
+            </>
           ) : null}
 
           <p className="mt-8 text-sm leading-relaxed text-ink-faint">

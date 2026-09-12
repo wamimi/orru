@@ -8,6 +8,7 @@ import { ScreenFrame } from "@/components/app/ScreenFrame";
 import { useFlowSession } from "@/components/app/useFlowSession";
 import { ButtonLink } from "@/components/ui/Button";
 import { CredentialCard } from "@/components/ui/CredentialCard";
+import { aliasFromCredentialId } from "@/lib/alias";
 import { parseOutcome } from "@/lib/app";
 import type { IncomeLookup, IncomeResponse } from "@/lib/income-types";
 import { credentialFromIncome } from "@/lib/income-view";
@@ -188,16 +189,37 @@ export function ProfileScreen() {
     );
   }
 
-  const card =
-    !qa && session.income
-      ? credentialFromIncome(session.income)
-      : demoCredential;
+  const card = (() => {
+    if (qa) {
+      return {
+        ...demoCredential,
+        id: "Example statement",
+        issuedOn: "Example",
+        status: "Preview" as const,
+      };
+    }
+    if (session.income && session.credentialId) {
+      return {
+        ...credentialFromIncome(session.income),
+        id: aliasFromCredentialId(session.credentialId),
+        issuedOn: "Issued",
+        status: "Valid" as const,
+      };
+    }
+    if (session.income) return credentialFromIncome(session.income);
+    return {
+      ...demoCredential,
+      id: "Not issued yet",
+      issuedOn: "Not issued yet",
+      status: "Preview" as const,
+    };
+  })();
 
   return (
     <ScreenFrame
       kicker="03 · Profile"
       title="Your income, as a range."
-      lede="Exact pay never goes into your statement — only a range."
+      lede="Exact pay never goes into your statement, only a range."
       aside={<CredentialCard data={card} />}
     >
       {session.incomes.length > 1 ? (
@@ -235,7 +257,7 @@ export function ProfileScreen() {
         <li className="border-t border-rule py-4">
           <p className="display-sm text-ink">A range, not a number</p>
           <p className="mt-1 text-sm leading-relaxed text-ink-soft">
-            Exact pay never goes into your statement — only a range.
+            Exact pay never goes into your statement, only a range.
           </p>
         </li>
         <li className="border-t border-rule py-4">

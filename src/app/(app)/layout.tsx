@@ -1,5 +1,6 @@
 import { AppNav } from "@/components/app/AppNav";
 import { PrivyProviders } from "@/components/app/PrivyProviders";
+import { WorkflowProgress } from "@/components/app/WorkflowProgress";
 
 export const dynamic = "force-dynamic";
 
@@ -8,9 +9,12 @@ export default function AppLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <PrivyProviders>
-      <div className="flex min-h-dvh flex-col bg-canvas">
+      <div className="product-shell app-shell">
         <AppNav />
-        <main className="flex-1">{children}</main>
+        <main className="app-main">
+          <WorkflowProgress />
+          {children}
+        </main>
       </div>
     </PrivyProviders>
   );

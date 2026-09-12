@@ -32,7 +32,7 @@ function fromEnvironment(): SlipBook[] {
     return parsed.books ?? [];
   } catch {
     // Never echo the value: a malformed book still holds real salts.
-    console.error("ORRU_SLIP_BOOKS is not valid JSON — private payers unavailable");
+    console.error("ORRU_SLIP_BOOKS is not valid JSON; private payers unavailable");
     return [];
   }
 }

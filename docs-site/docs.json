@@ -12,7 +12,7 @@
         "groups": [
           {
             "group": "Start here",
-            "pages": ["index"]
+            "pages": ["index", "attestcoin", "try", "roadmap"]
           },
           {
             "group": "Verifying a statement",

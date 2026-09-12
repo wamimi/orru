@@ -1,328 +1,124 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useLogin, usePrivy, useSignMessage, useWallets } from "@privy-io/react-auth";
-import { ArrowRight } from "@phosphor-icons/react";
-import { ActionStep } from "@/components/app/ActionStep";
+import { useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { ArrowRight, Check, Wallet } from "@phosphor-icons/react";
 import { Callout } from "@/components/app/Callout";
 import { ScreenFrame } from "@/components/app/ScreenFrame";
 import { useFlowSession } from "@/components/app/useFlowSession";
-import { Button, ButtonLink } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/Button";
 import { parseOutcome, truncateAddress } from "@/lib/app";
-import { CREDITCOIN_ID } from "@/lib/chain";
-import { demoSubject } from "@/lib/mock";
-
-type StepStatus = "idle" | "working" | "done" | "error";
 
 export function ConnectScreen() {
-  const router = useRouter();
   const search = useSearchParams();
   const outcome = parseOutcome(search.get("state"));
-  const errorKind = search.get("error");
   const requestId = search.get("request");
-  const { session, update, clear } = useFlowSession();
-  const [connect, setConnect] = useState<StepStatus>("idle");
-  const [sign, setSign] = useState<StepStatus>("idle");
-  const [cleared, setCleared] = useState(false);
-  const { ready: privyReady, authenticated, logout, user } = usePrivy();
-  const { wallets } = useWallets();
-  const { signMessage } = useSignMessage();
-  const { login } = useLogin({
-    onComplete: () => {
-      if (parseOutcome(search.get("state"))) return;
-      setCleared(false);
-      setConnect("done");
-    },
-    onError: () => {
-      setConnect("idle");
-    },
-  });
-
-  const qa = outcome !== null;
-  const forcedEmpty = outcome === "empty";
-  const forcedError = outcome === "error";
-  const forcedLoading = outcome === "loading";
-  const networkError = forcedError && errorKind === "network";
-  const signatureError = forcedError && errorKind !== "network";
-
-  const liveAddress =
-    wallets.find((wallet) => wallet.address)?.address ??
-    user?.wallet?.address ??
-    session.address ??
-    null;
-  const privyConnected = privyReady && authenticated && Boolean(liveAddress);
-
-  const connected =
-    !cleared &&
-    (outcome === "success" ||
-      connect === "done" ||
-      signatureError ||
-      (qa ? session.connected : privyReady ? privyConnected : session.connected));
-  const signed =
-    !cleared && (outcome === "success" || sign === "done" || session.signed);
-
-  const displayAddress = qa
-    ? demoSubject.displayAddress
-    : liveAddress
-      ? truncateAddress(liveAddress)
-      : null;
+  const { session, ready, update } = useFlowSession();
 
   useEffect(() => {
-    if (cleared || qa || !privyReady || !authenticated || !liveAddress) return;
-    void ensureCreditcoin().catch(() => undefined);
-    setConnect((status) => (status === "done" ? status : "done"));
-    if (
-      session.connected &&
-      session.address?.toLowerCase() === liveAddress.toLowerCase()
-    ) {
-      return;
-    }
-    update({
-      address: liveAddress,
-      connected: true,
-      signed:
-        session.address?.toLowerCase() === liveAddress.toLowerCase()
-          ? session.signed
-          : false,
-      requestId: requestId ?? session.requestId,
-    });
-  }, [
-    qa,
-    cleared,
-    privyReady,
-    authenticated,
-    liveAddress,
-    requestId,
-    session.address,
-    session.connected,
-    session.requestId,
-    session.signed,
-    update,
-  ]);
+    if (!requestId || requestId === session.requestId) return;
+    const frame = requestAnimationFrame(() => update({ requestId }));
+    return () => cancelAnimationFrame(frame);
+  }, [requestId, session.requestId, update]);
 
-  async function onConnect() {
-    if (forcedEmpty || networkError) return;
-    setCleared(false);
-    setConnect("working");
-    if (qa) {
-      window.setTimeout(() => {
-        setConnect("done");
-        update({ connected: true, requestId: requestId ?? session.requestId });
-      }, 700);
-      return;
-    }
-    login({ loginMethods: ["wallet"] });
+  const qaReady = outcome === "success";
+  const connected = qaReady || session.connected;
+  const signed = qaReady || session.signed;
+  const canContinue = qaReady || (ready && connected && signed);
+  const reviewHref = requestId
+    ? `/review?request=${encodeURIComponent(requestId)}`
+    : "/review";
+
+  if (outcome === "empty") {
+    return (
+      <ScreenFrame
+        kicker="Set up"
+        title="No wallet was found."
+        lede="Install a wallet, then use the control in the top-right corner to connect the payout account where you receive income."
+      >
+        <Callout
+          tone="empty"
+          title="A wallet is required"
+          body="Orru reads the connected address and asks for a free signature. It never receives permission to move funds."
+          actionLabel="Back to the website"
+          actionHref="/"
+        />
+      </ScreenFrame>
+    );
   }
 
-  async function ensureCreditcoin() {
-    const wallet = wallets.find((item) => item.address);
-    if (!wallet) return;
-    const current = wallet.chainId?.toString() ?? "";
-    if (
-      current === String(CREDITCOIN_ID) ||
-      current.endsWith(`:${CREDITCOIN_ID}`)
-    ) {
-      return;
-    }
-    await wallet.switchChain(CREDITCOIN_ID);
-  }
-
-  async function onSign() {
-    if (signatureError) {
-      setSign("error");
-      return;
-    }
-    setSign("working");
-    if (qa) {
-      window.setTimeout(() => {
-        setSign("done");
-        update({ signed: true });
-      }, 900);
-      return;
-    }
-    if (!liveAddress) {
-      setSign("idle");
-      return;
-    }
-    try {
-      await ensureCreditcoin();
-      const challengeResponse = await fetch(
-        `/api/auth/challenge?address=${liveAddress}`,
-      );
-      const challengeBody = (await challengeResponse.json()) as {
-        message?: string;
-        challenge?: string;
-        error?: string;
-      };
-      if (!challengeResponse.ok || !challengeBody.message || !challengeBody.challenge) {
-        setSign("error");
-        return;
-      }
-      const { signature } = await signMessage(
-        { message: challengeBody.message },
-        {
-          address: liveAddress,
-          uiOptions: { title: "Sign a short message" },
-        },
-      );
-      const verifyResponse = await fetch("/api/auth/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          address: liveAddress,
-          signature,
-          challenge: challengeBody.challenge,
-        }),
-      });
-      const verifyBody = (await verifyResponse.json()) as {
-        ok?: boolean;
-        sessionToken?: string;
-      };
-      if (!verifyResponse.ok || !verifyBody.sessionToken) {
-        setSign("error");
-        return;
-      }
-      setSign("done");
-      update({
-        address: liveAddress,
-        connected: true,
-        signed: true,
-        sessionToken: verifyBody.sessionToken,
-        requestId: requestId ?? session.requestId,
-        income: null,
-      });
-    } catch {
-      setSign("error");
-    }
-  }
-
-  async function onDisconnect() {
-    if (!qa) {
-      try {
-        await logout();
-      } catch {
-        /* ignore */
-      }
-      try {
-        await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-      } catch {
-        /* ignore */
-      }
-    }
-    clear();
-    setCleared(true);
-    setConnect("idle");
-    setSign("idle");
+  if (outcome === "error") {
+    return (
+      <ScreenFrame
+        kicker="Set up"
+        title="The wallet setup did not complete."
+        lede="Use the wallet control in the top-right corner to try again."
+      >
+        <Callout
+          tone="error"
+          title="Nothing was connected"
+          body="Check the selected account and network, then reconnect. No funds moved."
+        />
+      </ScreenFrame>
+    );
   }
 
   return (
     <ScreenFrame
-      kicker="01 · Connect"
-      title="Connect the payout account you get paid into."
-      lede="This has to be the address that receives pay — not a spare one. Sign to show this payout account is yours — this is free and moves no money."
+      kicker="Set up"
+      title="Connect the account where you get paid."
+      lede="Wallet setup now stays in the top-right corner, so your workspace remains available while you move through every step."
     >
-      {forcedEmpty ? (
-        <Callout
-          tone="empty"
-          title="No wallet found in this browser"
-          body="Install a wallet, then come back to this page. The address you connect must be the one that receives pay."
-          actionLabel="Back to the start"
-          actionHref="/"
-        />
-      ) : null}
-
-      {networkError ? (
-        <Callout
-          tone="error"
-          title="This address is on a network we do not check yet"
-          body="Switch the payout account to Creditcoin and connect again. Other networks are ignored for now."
-          actionLabel="Try again"
-          actionHref="/connect"
-        />
-      ) : null}
-
-      {sign === "error" ? (
-        <Callout
-          tone="error"
-          title="The signature was not completed"
-          body="You can decline the message. Without it we cannot show that the address is yours, and we will not look anything up."
-        >
-          <div className="mt-5">
-            <Button onClick={() => setSign("idle")}>Try the message again</Button>
+      <div className="connect-status">
+        <div className={connected ? "is-complete" : ""}>
+          <span className="connect-status__icon">
+            {connected ? <Check size={17} weight="bold" /> : <Wallet size={17} />}
+          </span>
+          <div>
+            <p>Connected payout account</p>
+            <span>
+              {connected
+                ? session.address
+                  ? truncateAddress(session.address)
+                  : "Connected"
+                : "Use Connect wallet in the top-right corner"}
+            </span>
           </div>
-        </Callout>
-      ) : null}
-
-      {!forcedEmpty && !networkError ? (
-        <div className="flex flex-col gap-10">
-          <ActionStep
-            number="01"
-            title="Connect the payout account"
-            body="We only read the address. No permission is granted to send funds."
-            complete={connected}
-            meta={
-              connected && displayAddress ? (
-                <p className="meta text-ink">{displayAddress}</p>
-              ) : null
-            }
-            action={
-              <Button
-                onClick={() => void onConnect()}
-                disabled={connected || forcedLoading || (!qa && !privyReady)}
-              >
-                {forcedLoading || connect === "working"
-                  ? "Looking…"
-                  : connected
-                    ? "Connected"
-                    : "Connect"}
-              </Button>
-            }
-          />
-          <ActionStep
-            number="02"
-            title="Sign a short message"
-            body="Sign to show this payout account is yours — this is free and moves no money."
-            complete={signed}
-            action={
-              <Button
-                onClick={() => void onSign()}
-                disabled={!connected || signed || forcedLoading}
-                variant={connected ? "solid" : "outline"}
-              >
-                {sign === "working"
-                  ? "Waiting…"
-                  : signed
-                    ? "Signed"
-                    : "Sign"}
-              </Button>
-            }
-          />
+          <strong>{connected ? "Connected" : "Required"}</strong>
         </div>
-      ) : null}
 
-      <div className="mt-10 flex flex-wrap items-center gap-4">
-        {signed ? (
-          <Button
-            onClick={() => {
-              const query = requestId ? `?request=${requestId}` : "";
-              router.push(`/review${query}`);
-            }}
-          >
-            Continue
-            <ArrowRight size={18} />
-          </Button>
-        ) : (
-          <ButtonLink href="/" variant="quiet">
-            Cancel
+        <div className={signed ? "is-complete" : ""}>
+          <span className="connect-status__icon">
+            <Check size={17} weight={signed ? "bold" : "regular"} />
+          </span>
+          <div>
+            <p>Ownership confirmation</p>
+            <span>
+              {signed
+                ? "Free signature confirmed"
+                : connected
+                  ? "Choose Verify wallet in the top-right corner"
+                  : "Available after connecting"}
+            </span>
+          </div>
+          <strong>{signed ? "Confirmed" : "Pending"}</strong>
+        </div>
+      </div>
+
+      <div className="connect-actions">
+        {canContinue ? (
+          <ButtonLink href={reviewHref}>
+            Review your income
+            <ArrowRight size={17} />
           </ButtonLink>
+        ) : (
+          <p className="meta text-ink-faint">
+            Complete both checks from the wallet control above to continue.
+          </p>
         )}
-        {connected && !forcedEmpty && !networkError ? (
-          <Button type="button" variant="quiet" onClick={() => void onDisconnect()}>
-            Disconnect
-          </Button>
-        ) : null}
+        <ButtonLink href="/app" variant="quiet">
+          Back to overview
+        </ButtonLink>
       </div>
     </ScreenFrame>
   );

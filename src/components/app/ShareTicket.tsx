@@ -12,7 +12,7 @@ export function ShareTicket({
   fields: string[];
 }) {
   return (
-    <div>
+    <div className="product-share-ticket">
       <div className="border-t-2 border-rule-strong pt-6 md:pt-8">
         <p className="meta text-brand">Requester</p>
         <h2 className="display-md mt-3 max-w-sm text-ink">{party}</h2>

@@ -15,7 +15,7 @@ export function PaymentRow({
   const links = evidenceLinks(payment);
 
   return (
-    <li className="border-t border-rule py-5 first:border-t-0">
+    <li className="product-payment-row border-t border-rule py-5 first:border-t-0">
       <button
         type="button"
         className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2 text-left"

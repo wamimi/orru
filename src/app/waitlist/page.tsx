@@ -71,6 +71,12 @@ export default function Home() {
 
         <div className="animate-rise-delay-3 mt-10 w-full max-w-xl">
           <WaitlistForm source="hero" />
+          <p className="mt-6 text-center text-sm text-fog">
+            Already have a statement?{" "}
+            <a href="/check" className="text-mist underline decoration-white/20 underline-offset-4 hover:text-paper">
+              Check it
+            </a>
+          </p>
         </div>
       </div>
     </main>

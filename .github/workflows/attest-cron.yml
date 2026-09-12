@@ -12,7 +12,7 @@ permissions:
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 concurrency:
@@ -43,10 +43,8 @@ jobs:
           key: worker-state-${{ github.run_id }}
           restore-keys: worker-state-
 
-      # shared/ is its own package. worker/src imports shared/commitment.ts, and
-      # Node resolves that file's own imports by walking up from shared/ — it
-      # never looks in worker/node_modules. Locally a root install happens to
-      # satisfy it; CI has no root install, so shared/ must be installed too.
+      # shared/commitment.ts resolves its imports from shared/node_modules, not
+      # the worker's.
       - name: Install dependencies
         run: |
           npm ci --no-audit --no-fund --prefix shared

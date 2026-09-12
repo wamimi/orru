@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { List, X } from "@phosphor-icons/react";
 import { Lockup } from "@/components/brand/Lockup";
-import { ButtonLink } from "@/components/ui/Button";
+import { LandingButton } from "@/components/marketing/LandingButton";
 import { navLinks, primaryCta } from "@/lib/nav";
 
 export function SiteNav() {
@@ -29,28 +29,17 @@ export function SiteNav() {
 
   return (
     <header
-      className={`sticky top-0 z-50 transition-tone duration-200 ${
-        scrolled || open
-          ? "border-b border-rule bg-canvas/90 backdrop-blur-md"
-          : "border-b border-transparent"
-      }`}
+      className={`mkt-nav ${scrolled ? "is-scrolled" : ""} ${open ? "is-open" : ""}`}
     >
-      <nav className="mx-auto flex w-full max-w-6xl items-center gap-6 px-6 py-4 md:px-10">
-        <Link
-          href="/"
-          aria-label="Orru home"
-          className="text-brand"
-          onClick={() => setOpen(false)}
-        >
-          <Lockup height={20} />
-        </Link>
-
-        <ul className="ml-4 hidden items-center gap-7 md:flex">
+      <nav className="mkt-nav__inner" aria-label="Main navigation">
+        <ul className="mkt-nav__links">
           {navLinks.map((link) => (
             <li key={link.label}>
               <Link
                 href={link.href}
-                className="text-sm text-ink-soft transition-tone duration-150 hover:text-ink"
+                className="mkt-nav__link"
+                target={link.href.startsWith("http") ? "_blank" : undefined}
+                rel={link.href.startsWith("http") ? "noreferrer" : undefined}
               >
                 {link.label}
               </Link>
@@ -58,17 +47,26 @@ export function SiteNav() {
           ))}
         </ul>
 
-        <div className="ml-auto flex items-center gap-2">
-          <ButtonLink href={primaryCta.href} className="min-h-10 px-4 text-sm">
+        <Link
+          href="/"
+          aria-label="Orru home"
+          className="mkt-nav__brand"
+          onClick={() => setOpen(false)}
+        >
+          <Lockup height={26} />
+        </Link>
+
+        <div className="mkt-nav__action">
+          <LandingButton href={primaryCta.href} arrow>
             {primaryCta.label}
-          </ButtonLink>
+          </LandingButton>
           <button
             type="button"
             onClick={() => setOpen((value) => !value)}
             aria-expanded={open}
             aria-controls="mobile-nav"
             aria-label={open ? "Close menu" : "Open menu"}
-            className="-mr-2 flex h-11 w-11 items-center justify-center text-ink md:hidden"
+            className="mkt-nav__menu"
           >
             {open ? <X size={22} /> : <List size={22} />}
           </button>
@@ -77,22 +75,35 @@ export function SiteNav() {
 
       <div
         id="mobile-nav"
-        hidden={!open}
-        className="border-t border-rule px-6 pb-5 pt-2 md:hidden"
+        className={`mkt-nav__mobile ${open ? "is-open" : ""}`}
+        aria-hidden={!open}
       >
-        <ul>
-          {navLinks.map((link) => (
-            <li key={link.label} className="border-b border-rule last:border-b-0">
-              <Link
-                href={link.href}
-                onClick={() => setOpen(false)}
-                className="flex min-h-12 items-center text-[0.9375rem] text-ink-soft transition-tone hover:text-ink"
-              >
-                {link.label}
+        <div>
+          <ul>
+            {navLinks.map((link) => (
+              <li key={link.label}>
+                <Link
+                  href={link.href}
+                  onClick={() => setOpen(false)}
+                  target={link.href.startsWith("http") ? "_blank" : undefined}
+                  rel={link.href.startsWith("http") ? "noreferrer" : undefined}
+                >
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+            <li>
+              <Link href="/check" onClick={() => setOpen(false)}>
+                Check a statement
               </Link>
             </li>
-          ))}
-        </ul>
+            <li>
+              <Link href={primaryCta.href} onClick={() => setOpen(false)}>
+                {primaryCta.label}
+              </Link>
+            </li>
+          </ul>
+        </div>
       </div>
     </header>
   );

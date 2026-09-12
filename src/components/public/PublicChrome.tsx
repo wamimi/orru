@@ -4,15 +4,24 @@ import { Lockup } from "@/components/brand/Lockup";
 
 export function PublicChrome({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-dvh flex-col bg-canvas">
-      <header className="sticky top-0 z-40 border-b border-rule bg-canvas/90 backdrop-blur-md">
-        <nav className="mx-auto flex w-full max-w-5xl items-center px-6 py-4 md:px-10">
-          <Link href="/" aria-label="Orru home" className="text-brand">
-            <Lockup height={20} />
+    <div className="product-shell public-shell">
+      <header className="public-nav">
+        <nav className="public-nav__inner" aria-label="Public statement navigation">
+          <Link href="/" aria-label="Orru home" className="public-nav__brand">
+            <Lockup height={22} />
           </Link>
+          <span className="public-nav__label">Public verification</span>
+          <div className="public-nav__actions">
+            <Link href="/check" className="public-nav__link">
+              Check a statement
+            </Link>
+            <Link href="/connect" className="public-nav__link">
+              Launch app
+            </Link>
+          </div>
         </nav>
       </header>
-      <main className="flex-1">{children}</main>
+      <main className="public-main">{children}</main>
     </div>
   );
 }

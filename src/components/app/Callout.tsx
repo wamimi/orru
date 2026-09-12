@@ -24,7 +24,7 @@ export function Callout({
         : "border-rule-strong";
 
   return (
-    <div className={`border-t-2 pt-6 md:pt-8 ${rule}`}>
+    <div className={`product-callout border-t-2 pt-6 md:pt-8 ${rule}`}>
       <p className="display-md max-w-md text-ink">{title}</p>
       <p className="mt-3 max-w-md text-[0.9375rem] leading-relaxed text-ink-soft">
         {body}

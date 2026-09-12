@@ -13,14 +13,14 @@ export type CredentialData = {
 };
 
 export const sampleCredential: CredentialData = {
-  id: "orru:cred:8f41c2a7",
+  id: "Example statement",
   band: "$3,000 – $5,000",
   bandUnit: "per month",
   periods: "4 consecutive",
   lastPayment: "6 days ago",
   payer: "Admitted payer",
-  issuedOn: "Creditcoin",
-  status: "Valid",
+  issuedOn: "Example",
+  status: "Preview",
 };
 
 export function CredentialCard({

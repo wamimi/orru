@@ -3,11 +3,12 @@ title: "Becoming a payer"
 description: "How an employer, platform or grant programme makes their payments provable."
 ---
 
-Orru turns payments you already make into income your workers can prove — without
-you vouching for them, holding their data, or answering support tickets about it.
+Orru turns payment records into income your workers can prove, without a lender
+having to trust Orru's database or ask you for a fresh employment letter.
 
-You are not asserting anything about a person. You are recording that you paid,
-in a form a third party can verify against Ethereum without asking either of us.
+What the record proves depends on how you paid. An Ethereum token transfer proves
+that value moved. An off-chain payer's commitment proves that the approved payer
+made a timestamped assertion; it does not cryptographically prove a bank transfer.
 
 ## Two models
 
@@ -22,7 +23,7 @@ Attestcoin can read.
     Strongest claim available. The amount is public, because the transfer is.
   </Card>
   <Card title="Anchored payment" icon="lock">
-    You pay however you like — bank transfer, another chain, payroll provider —
+    You pay however you like (bank transfer, another chain, payroll provider)
     and anchor only a commitment on Ethereum.
 
     **The amount appears on no chain.** What is authenticated is your
@@ -33,8 +34,8 @@ Attestcoin can read.
 <Warning>
 These prove different things and you should not blur them. On-chain proves money
 moved. Anchored proves *you said* money moved, authenticated and timestamped.
-The second is how payroll verification has always worked — an employer asserting
-what they paid — but it rests on your identity, not on cryptography alone.
+The second is how payroll verification has always worked, an employer asserting
+what they paid, but it rests on your identity, not on cryptography alone.
 </Warning>
 
 ## What you commit to
@@ -42,7 +43,7 @@ what they paid — but it rests on your identity, not on cryptography alone.
 <Steps>
   <Step title="Get approved once">
     An admin calls `setPayerApproval(yourAddress, true)` on the attestation
-    registry. Until then your events are ignored — this is what stops someone
+    registry. Until then your events are ignored. This is what stops someone
     deploying a lookalike contract and minting themselves an income history.
   </Step>
   <Step title="Anchor each payment run">
@@ -50,13 +51,15 @@ what they paid — but it rests on your identity, not on cryptography alone.
   </Step>
   <Step title="Deliver the slip, if you anchor">
     For anchored payments, the worker needs `{ amount, period, salt }` to build
-    their proof. You are the only one who has it. On-chain payers skip this —
-    the payroll contract publishes it.
+    their proof. Deliver it through a channel appropriate for payslip data and
+    never publish it. On-chain payers can derive the same values from public
+    contract data instead.
   </Step>
 </Steps>
 
-That is the whole integration. No webhook to maintain, no data to store on our
-behalf, no API key.
+That is the whole chain integration. A production payer can deliver slips
+directly to its workers; Orru's current testnet demo also supports authenticated
+server delivery so judges can complete the flow without a payroll portal.
 
 ## What you never do
 
@@ -69,8 +72,8 @@ behalf, no API key.
 
 ## The identity rule that matters
 
-The payer is taken from `topics[1]` of the anchoring event — the `msg.sender`
-that called the anchor — **never the transaction's `from`**.
+The payer is taken from `topics[1]` of the anchoring event, the `msg.sender`
+that called the anchor, and **never the transaction's `from`**.
 
 <Note>
 If you anchor through a relayer, a multisig, a smart account or an EIP-7702
@@ -85,7 +88,7 @@ One anchor transaction per payroll run on Ethereum. Batched, so a run of thirty
 workers is one transaction carrying thirty 32-byte hashes.
 
 <Info>
-Verification cost rises with event age — roughly tenfold after 24 hours. Anchor
+Verification cost rises with event age, roughly tenfold after 24 hours. Anchor
 promptly, and have whatever relays your anchors run at least daily.
 </Info>
 

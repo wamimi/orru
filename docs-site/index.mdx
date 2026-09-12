@@ -3,17 +3,19 @@ title: "Orru"
 description: "Prove your income without revealing it, and without anyone taking your word for it."
 ---
 
-Orru turns payments you already receive into income you can prove — to a lender,
-a landlord, or a platform — without revealing what you earn and without a bank,
+Orru turns payments you already receive into income you can prove to a lender,
+a landlord, or a platform, without revealing what you earn and without a bank,
 an employer letter, or a screenshot of your account.
 
 ## How it works, in one paragraph
 
-Your payer records each payment on Ethereum. Attestcoin authenticates that record
-against attested Ethereum history, through Creditcoin's native query verifier —
-not an API call, a proof checked on-chain. You then prove, in zero knowledge, that
-every payment fell inside one income range. What lands on Creditcoin is a
-statement carrying that range and nothing else. No exact figure, ever.
+Your payer records payment evidence on Ethereum. An on-chain payer records the
+token transfer itself; an off-chain payer records a commitment to its own payment
+record. Attestcoin authenticates the Ethereum transaction through Creditcoin's
+native query verifier. You then prove, in zero knowledge, that the private values
+behind three accepted commitments all fell inside one income range. The
+Creditcoin statement contains that range, the payer, the subject, the period
+count, a dated evidence window and its status, but never the exact amounts.
 
 <CardGroup cols={3}>
   <Card title="Verify a statement" icon="badge-check" href="/verify/overview">
@@ -25,24 +27,32 @@ statement carrying that range and nothing else. No exact figure, ever.
   <Card title="Read it yourself" icon="code" href="/verify/on-chain">
     Two contract calls. Skip us entirely.
   </Card>
+  <Card title="Try Orru" icon="flask" href="/try">
+    Start with a prepared judge wallet or create a fresh demo history.
+  </Card>
 </CardGroup>
 
 ## What makes it different
 
 <AccordionGroup>
-  <Accordion title="Nobody takes anyone's word">
-    Etherscan finds the payments. Attestcoin proves them. Creditcoin accepts a
-    statement only when a proof verifies on-chain. There is no oracle in the
-    path and no step where you have to trust that we looked honestly.
+  <Accordion title="No Orru database has to be trusted">
+    Etherscan only finds candidate records. Attestcoin authenticates the source
+    transaction, and Creditcoin checks the expected source, the approved payer,
+    the same commitments and the zero-knowledge proof. An off-chain payment still
+    begins with an approved payer's assertion; Orru does not pretend a commitment
+    is proof of a bank transfer.
   </Accordion>
-  <Accordion title="The amount never leaves your machine">
-    Proving happens in your browser. The figure is an input to a zero-knowledge
-    proof and goes nowhere else. A server that proved on your behalf would see
-    it — which is why we do not do that.
+  <Accordion title="The amount is not published">
+    The exact amounts and salts are absent from the chain, the issued statement,
+    the public checker and the lender view. Proving happens in a Web Worker in
+    your browser, and the private witness is not sent to a proving service. In
+    the current demo, Orru's authenticated server delivers or derives the demo
+    slip before the browser proves it; a production payer should deliver the
+    private slip directly to the worker.
   </Accordion>
   <Accordion title="Statements don't expire, and that's deliberate">
     A statement attests a dated past window, and that stays true. Whether it is
-    recent enough is the reader's policy — a payday lender and a mortgage
+    recent enough is the reader's policy. A payday lender and a mortgage
     underwriter will not agree, and neither should be forced into the other's
     answer.
   </Accordion>
@@ -55,16 +65,17 @@ statement carrying that range and nothing else. No exact figure, ever.
 
 <Warning>
 A statement does not prove future income, affordability, legal credit
-eligibility, or guaranteed repayment. It is a dated record of past payments —
+eligibility, or guaranteed repayment. It is a dated record of past payments:
 one input to a decision, not the decision.
 </Warning>
 
 ## Live today
 
 Everything documented here is deployed on Ethereum Sepolia and Creditcoin
-testnet, and has been exercised end to end with real payments and real proofs.
+testnet, and has been exercised end to end with real testnet transactions and
+real proofs. The payroll figures and credit capital are demo economics.
 
 <Info>
 Testnet, and the credit pool is disclosed as simulated capital. The verification
-path is not simulated — the proofs are real and verified on-chain.
+path is not simulated. The proofs are real and verified on-chain.
 </Info>

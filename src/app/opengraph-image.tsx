@@ -48,7 +48,7 @@ export default function OpengraphImage() {
             Proof of income for people paid in crypto.
           </div>
           <div style={{ fontSize: 30, color: "#566159", maxWidth: 760 }}>
-            Verified stablecoin earnings, shared as a band — never as an amount.
+            Verified stablecoin earnings, shared as a range. Never as an amount.
           </div>
         </div>
 

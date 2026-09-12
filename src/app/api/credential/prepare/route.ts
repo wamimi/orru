@@ -22,7 +22,7 @@ type PrepareBody = {
  * Builds the authorization the subject signs, over a statement their own
  * browser produced.
  *
- * The server never sees the amounts — only the finished statement, which is
+ * The server never sees the amounts, only the finished statement, which is
  * public by the time it reaches the chain. It reads the on-chain nonce, which
  * is the one thing the browser cannot supply for itself.
  */

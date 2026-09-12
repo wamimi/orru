@@ -1,0 +1,66 @@
+---
+title: "Try Orru"
+description: "The fast prepared-wallet path and the full demo-faucet path."
+---
+
+The tester never pays network fees. The connected wallet signs to prove control;
+Orru's demo payer covers Sepolia gas and Orru's relayer covers Creditcoin gas.
+
+## Start here: prepared judge wallet
+
+This is the default judging path because its three Semuni pay cycles have already
+been accepted on Creditcoin. The wallets and their keys are provided with the
+DoraHacks submission. They are testnet accounts holding nothing of value. Exact
+amounts and salts are never published anywhere.
+
+<Steps>
+  <Step title="Import and connect">
+    Import one of the judge accounts into MetaMask or Rabby, open
+    [orru.xyz/connect](https://orru.xyz/connect), connect it and sign the wallet
+    ownership message. The wallet needs no ETH or CTC.
+  </Step>
+  <Step title="Review and issue">
+    Review the three accepted Semuni pay cycles, generate the proof in the
+    browser and issue the band-only statement.
+  </Step>
+  <Step title="Borrow and verify">
+    Borrow from the disclosed demo pool, then copy the credential id or public
+    link and open it in a private window. Public verification needs no wallet or
+    Orru account.
+  </Step>
+</Steps>
+
+## Optional: full demo faucet
+
+The faucet is open to anyone with a wallet they control. It creates three demo
+off-chain payment records, anchors their commitments in one Sepolia transaction,
+waits for Attestcoin coverage and then waits for Orru's scheduled relayer to
+record the accepted commitments on Creditcoin.
+
+1. Open [orru.xyz/try](https://orru.xyz/try), connect a fresh wallet and sign.
+2. Select **Create demo history**. The wallet pays nothing.
+3. Leave the page open. It checks every 15 seconds and shows four real stages:
+   sent to Ethereum, Ethereum confirmed, Attestcoin covered and Creditcoin
+   accepted.
+4. When the history is ready, continue through review, proof, statement issuance,
+   borrowing and public verification.
+
+The normal wait is 10 to 15 minutes. Attestcoin intentionally trails the latest
+Ethereum block, and Orru's relayer runs every five minutes. Polling more often
+cannot make either stage advance sooner. If the history is still not ready after
+25 minutes, check the latest `attest` workflow in GitHub Actions.
+
+<Warning>
+The faucet spends real Sepolia gas from a testnet hot key. It is a demo service,
+not a source of spendable funds. Operators should keep the key minimally funded
+and use persistent, shared abuse controls when exposing the route from a
+serverless deployment.
+</Warning>
+
+## What the faucet actually creates
+
+Semuni represents the off-chain payer model. No ERC-20 salary transfer occurs on
+Sepolia. The three private demo records are simulated; their commitments are
+genuinely anchored on Ethereum, authenticated by Attestcoin and accepted on
+Creditcoin. The later zero-knowledge proof and issued statement are real testnet
+proofs and contract state.

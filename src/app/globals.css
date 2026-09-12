@@ -58,7 +58,7 @@
   --night: #0e2521;
   --night-raised: #143029;
 
-  /* Type — ink-soft is 6.5:1 and ink-faint 4.6:1 against --canvas */
+  /* Type: ink-soft is 6.5:1 and ink-faint 4.6:1 against --canvas */
   --ink: #12302b;
   --ink-soft: #4e5a52;
   --ink-faint: #67716b;
@@ -139,7 +139,7 @@
 @layer components {
   /*
    * Focus rings live in the components layer so the colour cannot be pulled
-   * back to currentColor by a base-layer reset — a cream ring on a cream page
+   * back to currentColor by a base-layer reset, a cream ring on a cream page
    * is an invisible focus ring.
    */
   :focus-visible {

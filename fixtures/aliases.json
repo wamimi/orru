@@ -1,0 +1,6 @@
+{
+  "note": "Short ids are orru:cred: plus the first eight hex chars of the on-chain credentialId. This file seeds lookups after a cold start. At Issue the same mapping is registered in memory.",
+  "aliases": {
+    "7b6a24eb": "0x7b6a24eb96a3eaf45f9dd61e5fcf9716ca4ad52a80a1ee09b93518ba150bf026"
+  }
+}

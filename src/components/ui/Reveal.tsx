@@ -12,7 +12,7 @@ type RevealProps = {
 /**
  * Scroll-linked fade-up driven entirely by CSS `animation-timeline: view()`.
  * No observers and no client JS, so content can never be left stuck at
- * opacity 0 — browsers without support simply render it plainly.
+ * opacity 0; browsers without support simply render it plainly.
  */
 export function Reveal({
   children,

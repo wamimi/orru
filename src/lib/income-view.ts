@@ -16,17 +16,23 @@ export function paymentsFromIncome(income: IncomeLookup): Payment[] {
   return income.evidence
     .slice()
     .sort((a, b) => b.period - a.period)
-    .map((row) => ({
-      id: `${row.period}-${row.sourceTx}`,
-      received: formatReceivedAt(row.verifiedAt),
-      period: `Period ${row.period}`,
-      payer: income.payerName,
-      recognised: true,
-      evidence: row.verifiedTx ? "attested" : "found",
-      sourceChain: row.sourceChain,
-      sourceTx: row.sourceTx,
-      verifiedTx: row.verifiedTx,
-    }));
+    .map((row) => {
+      // Off-chain payments have an anchor but no payment transaction. Older
+      // faucet rows use `0x` as the internal sentinel; never turn it into a
+      // broken explorer link or an "unconfirmed" label.
+      const sourceTx = row.sourceTx.length === 66 ? row.sourceTx : undefined;
+      return {
+        id: `${row.period}-${sourceTx ?? income.payerAddress}`,
+        received: formatReceivedAt(row.verifiedAt),
+        period: `Period ${row.period}`,
+        payer: income.payerName,
+        recognised: true,
+        evidence: row.attested || row.verifiedTx ? "attested" : "found",
+        sourceChain: row.sourceChain,
+        sourceTx,
+        verifiedTx: row.verifiedTx,
+      };
+    });
 }
 
 export function credentialFromIncome(income: IncomeLookup): CredentialData {
@@ -37,12 +43,12 @@ export function credentialFromIncome(income: IncomeLookup): CredentialData {
 
   return {
     id: "Not issued yet",
-    band: income.incomeBand?.label ?? "—",
+    band: income.incomeBand?.label ?? "No range yet",
     bandUnit: "per pay cycle",
     periods: income.provableWindow
       ? `${periods} consecutive`
       : `${periods} periods`,
-    lastPayment: last ? formatReceivedAt(last.verifiedAt) : "—",
+    lastPayment: last ? formatReceivedAt(last.verifiedAt) : "None yet",
     payer: income.payerName,
     issuedOn: "Not issued yet",
     status: "Preview",
@@ -53,7 +59,7 @@ export function sharedFieldsFromIncome(income: IncomeLookup) {
   return [
     {
       label: "Income band",
-      value: income.incomeBand?.label ?? "—",
+      value: income.incomeBand?.label ?? "No range yet",
       state: "verified" as const,
     },
     {
@@ -67,7 +73,7 @@ export function sharedFieldsFromIncome(income: IncomeLookup) {
         ? formatReceivedAt(
             [...income.evidence].sort((a, b) => b.period - a.period)[0].verifiedAt,
           )
-        : "—",
+        : "None yet",
       state: "attested" as const,
     },
     {

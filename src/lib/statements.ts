@@ -25,6 +25,9 @@ export type Statement = {
   periodsProven: number;
   issuedAt: string | null;
   revokedAt: string | null;
+  issuanceTx: `0x${string}` | null;
+  /** Base units for the statement's full limit. */
+  limit: string;
   /** Base units, drawable now. */
   remaining: string;
 };
@@ -52,10 +55,11 @@ function asDate(seconds: bigint): string | null {
 /** A wallet's statements and credit, read from Creditcoin. */
 export async function statementsFor(
   address: `0x${string}`,
+  options: { fresh?: boolean } = {},
 ): Promise<StatementsPayload> {
   const key = address.toLowerCase();
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < CACHE_MS) return hit.payload;
+  if (!options.fresh && hit && Date.now() - hit.at < CACHE_MS) return hit.payload;
 
   const registry = ADDRESSES[CREDITCOIN_ID].credentialRegistry;
   const pool = ADDRESSES[CREDITCOIN_ID].creditPool;
@@ -85,6 +89,13 @@ export async function statementsFor(
   const ids = [...new Set(logs.map((log) => log.args.credentialId))].filter(
     (id): id is `0x${string}` => Boolean(id),
   );
+  const issuanceTx = new Map(
+    logs.flatMap((log) =>
+      log.args.credentialId && log.transactionHash
+        ? [[log.args.credentialId.toLowerCase(), log.transactionHash] as const]
+        : [],
+    ),
+  );
 
   const statements = await Promise.all(
     ids.map(async (credentialId) => {
@@ -109,6 +120,13 @@ export async function statementsFor(
         }),
       ]);
 
+      const limit = await creditcoinClient.readContract({
+        address: pool,
+        abi: creditPoolAbi,
+        functionName: "limitForBand",
+        args: [record.band],
+      });
+
       return {
         credentialId,
         status: CREDENTIAL_STATUS[Number(statusCode)] ?? "unknown",
@@ -118,6 +136,8 @@ export async function statementsFor(
         periodsProven: Number(record.periodsProven),
         issuedAt: asDate(record.issuedAt),
         revokedAt: asDate(record.revokedAt),
+        issuanceTx: issuanceTx.get(credentialId.toLowerCase()) ?? null,
+        limit: limit.toString(),
         remaining: remaining.toString(),
       } satisfies Statement;
     }),

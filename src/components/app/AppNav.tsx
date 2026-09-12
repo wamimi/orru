@@ -3,24 +3,41 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Lockup } from "@/components/brand/Lockup";
-import { StepProgress } from "@/components/app/StepProgress";
-import { appSteps } from "@/lib/app";
+import { WalletControl } from "@/components/app/WalletControl";
 
 export function AppNav() {
   const pathname = usePathname();
-  const index = appSteps.findIndex((step) => pathname.startsWith(step.href));
 
   return (
-    <header className="sticky top-0 z-40 border-b border-rule bg-canvas/90 backdrop-blur-md">
-      <nav className="mx-auto flex w-full max-w-5xl items-start gap-6 px-6 py-4 md:px-10">
-        <Link
-          href="/"
-          aria-label="Orru home"
-          className="mt-0.5 shrink-0 text-brand"
-        >
-          <Lockup height={20} />
+    <header className="app-topbar">
+      <nav className="app-topbar__inner" aria-label="Application navigation">
+        <Link href="/app" aria-label="Orru workspace" className="app-topbar__brand">
+          <Lockup height={22} />
         </Link>
-        <StepProgress currentIndex={index} />
+
+        <div className="app-topbar__links">
+          <Link
+            href="/app"
+            className={pathname === "/app" ? "is-active" : ""}
+          >
+            Overview
+          </Link>
+          <Link
+            href="/review"
+            className={
+              ["/review", "/profile", "/credential", "/consent"].some((route) =>
+                pathname.startsWith(route),
+              )
+                ? "is-active"
+                : ""
+            }
+          >
+            Statement
+          </Link>
+          <Link href="/check">Public checker</Link>
+        </div>
+
+        <WalletControl />
       </nav>
     </header>
   );

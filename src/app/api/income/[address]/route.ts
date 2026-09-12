@@ -19,24 +19,60 @@ export async function GET(
 
   try {
     const { faucetConfigured } = await import("@/lib/faucet");
-    const [payroll, claimed] = await Promise.all([
+    const [payrollResult, claimedResult] = await Promise.allSettled([
       deriveIncome(address),
       faucetConfigured()
         ? import("@/lib/faucet-income").then((m) => m.faucetIncome(address))
         : Promise.resolve(null),
     ]);
 
+    const payroll =
+      payrollResult.status === "fulfilled" ? payrollResult.value : null;
+    const claimed =
+      claimedResult.status === "fulfilled" ? claimedResult.value : null;
+
     // Chain-derived rows replace snapshot rows per payer; the snapshot only
     // supplies payers the chain cannot describe.
     const live = [payroll, claimed].filter((row) => row !== null);
     const covered = new Set(live.map((row) => row.payerAddress.toLowerCase()));
 
-    const stale = (snapshotAvailable() ? incomesForAddress(address) : []).filter(
-      (row) => !covered.has(row.payerAddress.toLowerCase()),
-    );
+    let stale: ReturnType<typeof incomesForAddress> = [];
+    let snapshotFailed = false;
+    try {
+      stale = (snapshotAvailable() ? incomesForAddress(address) : []).filter(
+        (row) => !covered.has(row.payerAddress.toLowerCase()),
+      );
+    } catch {
+      snapshotFailed = true;
+    }
+
+    // A temporary failure in one discovery source must not discard a valid row
+    // returned by the other one. If neither source returned anything, however,
+    // report the failed read instead of presenting it as an empty history.
+    if (
+      live.length === 0 &&
+      stale.length === 0 &&
+      (payrollResult.status === "rejected" ||
+        claimedResult.status === "rejected" ||
+        snapshotFailed)
+    ) {
+      console.error("[orru] income lookup had no usable source", {
+        payroll: payrollResult.status,
+        faucet: claimedResult.status,
+        snapshot: snapshotFailed ? "rejected" : "fulfilled",
+      });
+      return NextResponse.json(
+        { error: "Income records are not available yet." },
+        { status: 503 },
+      );
+    }
 
     return NextResponse.json({ address, incomes: [...live, ...stale] });
-  } catch {
+  } catch (error) {
+    console.error(
+      "[orru] income route failed",
+      error instanceof Error ? error.name : "UnknownError",
+    );
     return NextResponse.json(
       { error: "Income records are not available yet." },
       { status: 503 },

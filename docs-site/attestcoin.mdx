@@ -1,0 +1,173 @@
+---
+title: "How Orru uses Attestcoin"
+description: "The precompile call, the checks the contract adds, the worker that feeds it, and where to see it on-chain."
+---
+
+Attestcoin is the trust root of Orru. It is how Creditcoin learns that a payment
+happened on Ethereum without taking anyone's word for it, ours included. Every
+statement Orru issues, and every credit draw against one, depends on an
+attestation that this page describes end to end.
+
+> Etherscan finds it. Attestcoin proves it. Creditcoin never takes anyone's word.
+
+## The pieces
+
+| Piece | Value |
+|---|---|
+| Native query verifier precompile | `0x0000000000000000000000000000000000000FD2` on Creditcoin |
+| Chain-info precompile | `0x0000000000000000000000000000000000000fd3` on Creditcoin |
+| Proof builder service | `https://prover.cc3-testnet.creditcoin.network/` |
+| Source chain keys | Ethereum Sepolia `1`, Ethereum mainnet `3` (not EVM chain ids) |
+| SDK | `@gluwa/usc-sdk` 0.18.0 in the worker, `@gluwa/usc-contracts` 0.1.2 on-chain |
+| Consumer contract | `AttestationRegistry` `0x47172643d148300d2649C475d68a5bD49267e60C` |
+| Depends on it | `CredentialRegistry` `0xc4694C8db29C668Bebb2502664228156F11a8481`, `DemoCreditPool` `0x1B906254Ceca488c301E7063d437c8B18da10e9e` |
+| Ethereum sources | `PayerAnchor` `0x16EaB9DA91D2AEea1F1138A95E42C37d1D47B7d2`, `DemoPayroll` `0xD3a8Fd44b63890d518d15e3efECfA11a71276B3d` (Sepolia) |
+
+## What Attestcoin establishes, and what it does not
+
+The precompile authenticates that a transaction was included in an attested
+Ethereum block and returns its receipt. That is all. It does not check that the
+transaction succeeded, and it does not interpret the receipt. Both are the
+application's job, and both are done in `AttestationRegistry`.
+
+For Demo Payroll the authenticated receipt contains an ERC-20 transfer, so
+Attestcoin proves the payment itself. For Semuni, an off-chain payer, the receipt
+contains the payer's anchored commitment, so Attestcoin proves that the approved
+payer attested to the payment. It does not prove that a bank transfer settled.
+The statement records which payer the evidence came from, so a verifier can
+apply its own policy to each.
+
+## On-chain: the consumer contract
+
+`contracts/src/attestcoin/USCBase.sol` is the adapter around the verifier
+interface. Its `execute` function is permissionless, because the proof is the
+authorization:
+
+1. computes a query id from `(chainKey, blockHeight, txIndex)` and refuses one
+   already processed, so a source transaction is consumed once;
+2. calls the native query verifier with the encoded transaction, Merkle root,
+   siblings, lower endpoint digest and continuity roots;
+3. only if that returns true, hands the receipt to `_processAndEmitEvent`.
+
+`contracts/src/creditcoin/AttestationRegistry.sol` overrides
+`_processAndEmitEvent` and adds the five checks the precompile deliberately
+leaves out:
+
+| Check | Why | Where |
+|---|---|---|
+| `chainKey == SOURCE_CHAIN_KEY` | A receipt from another chain is not evidence here | `WrongSourceChain` |
+| Transaction type is one `EvmV1Decoder` understands | Undecodable input is rejected, not guessed | `UnsupportedTransactionType` |
+| `receipt.receiptStatus == 1` | Inclusion is not success; a reverted payment is still included | `SourceTransactionFailed` |
+| `log.address_ == TRUSTED_ANCHOR` and the log is shaped like `PaymentAnchored(address,bytes32)` | Anyone can deploy a contract that emits an identical event and obtain a genuine proof for it | `_isTrustedAnchorLog` |
+| Payer read from `topics[1]` is in `approvedPayer` | `from` is whoever paid gas; `topics[1]` is the payer. Unknown payers are ignored, never trusted | `approvedPayer` |
+
+Receipts are bounded to 256 matching logs. Every surviving log records the
+earliest authenticated Ethereum height in `provenAtHeight[commitment][payer]`,
+marks `acceptedByPayer[commitment][payer]`, and emits
+`CommitmentAccepted(commitment, payer, queryId, blockHeight)`. Acceptance is
+idempotent so a repeated commitment cannot strand the others in the same
+receipt. A receipt with no accepted log reverts `NoTrustedLogs`. Each of these
+rules has a negative test in `contracts/test`.
+
+## Composed with the zero-knowledge proof
+
+Attestcoin proves a commitment was anchored. A Noir proof, built in the user's
+browser, shows that the amounts behind three commitments fall in one income
+band. The two are joined in `CredentialRegistry.issue`:
+
+```solidity
+// contracts/src/creditcoin/CredentialRegistry.sol
+if (!verifier.verify(req.proof, req.publicInputs)) revert InvalidProof();
+// and, for each of the three commitments in the public inputs:
+if (!attestations.acceptedByPayer(commitment, evidencePayer)) {
+    revert CommitmentNotAttestedToPayer(commitment, evidencePayer);
+}
+```
+
+The same `bytes32` is checked on both sides. That binding is the security:
+requiring two unrelated facts would not be composition. The newest
+`provenAtHeight` across the three becomes the statement's `evidenceEndHeight`,
+and `DemoCreditPool` refuses to disburse below its `minimumEvidenceHeight`
+(`EvidenceTooOld`). A credit decision cannot happen without an attestation.
+
+## Off-chain: the worker
+
+`worker/src/attest.ts` carries anchored payments from Ethereum to Creditcoin
+with the official SDK. Discovery uses Etherscan and is trusted for nothing; a
+found payment is only a candidate until the precompile accepts it.
+
+1. Scan Sepolia for `PaymentAnchored` events with a checkpoint journal that
+   walks ancestors on a reorg and never advances past a mismatch.
+2. Keep only anchors whose payer is approved on the registry (an allowlist first,
+   then a cached on-chain lookup, bounded per pass).
+3. Wait until Attestcoin covers `anchor block + 10` (`WORKER_ATTEST_LOOKAHEAD`),
+   read through `PrecompileChainInfoProvider` and the proof builder's
+   `/api/v1/attested-height/1`.
+4. Fetch the proof bundle from `proofProvider.service.ProofBuilder` and submit
+   `execute` from the relayer key.
+5. Read back `acceptedByPayer` for every `(commitment, payer)` pair before
+   recording the anchor as done; a submitted transaction is not the same as an
+   accepted commitment.
+
+It runs unattended every five minutes in `.github/workflows/attest-cron.yml`,
+oldest first, fifteen anchors per pass, because verification cost rises with
+event age.
+
+## In the product
+
+The demo faucet page reads Attestcoin's own state so a tester can watch it
+work: `get_latest_attestation_height_and_hash(1)` from the chain-info
+precompile and the proof builder's attested height, whichever is lower, against
+the block the claim needs. The four stages it shows are real: sent to Ethereum,
+Ethereum confirmed, Attestcoin covered, Creditcoin accepted. Review and
+statement screens read `acceptedByPayer` for the exact pairs, never a cache of
+what was submitted.
+
+## Limits, stated plainly
+
+- Attestcoin reads Ethereum only. Payments on other chains reach Orru only by a
+  payer anchoring a commitment on Ethereum.
+- It trails Ethereum by roughly seven minutes, and the relay adds up to five, so
+  a fresh anchor takes ten to fifteen minutes to become provable.
+- Verification cost grows with event age, about tenfold after a day. The worker
+  processes fresh events first.
+- Inclusion is not success, and an anchor is the payer's word. The contract
+  handles the first; the statement discloses the second by naming the payer.
+- The write layer (Creditcoin to Ethereum) is not live in this window. The
+  receiver design, an adapter between the Inbox and the application with the
+  emitter validated against a trusted set, is written down and not depended on.
+
+## See it on-chain
+
+One complete run, made on 12 September 2026 by a fresh wallet through the demo
+faucet:
+
+| Step | Chain | Transaction |
+|---|---|---|
+| Semuni anchors three commitments | Sepolia, block 11688412 | [`0xd359d8b2…13bcdbf`](https://sepolia.etherscan.io/tx/0xd359d8b2ac627d63662c5e04ee929d1f6ef8a5c2a0b74437c75240c7613bcdbf) |
+| Worker submits the Attestcoin proof; registry accepts the commitments | Creditcoin, block 5474663 | [`0x127c9fd2…238019b`](https://creditcoin-testnet.blockscout.com/tx/0x127c9fd2f49de5459b9cff72b3dd3af49c7df69941bbda097d4efe503238019b) |
+| Statement issued against those exact commitments | Creditcoin, block 5474877 | [`0xe022428a…8650c8`](https://creditcoin-testnet.blockscout.com/tx/0xe022428a9d2bab2322ff270d9d20cb4a398ae290da1ea11bfb5d7ac5568650c8) |
+| 450 mUSDC drawn against the statement | Creditcoin, block 5474900 | [`0xd4237bb4…9ac52e6`](https://creditcoin-testnet.blockscout.com/tx/0xd4237bb4e5c045aab3532fa3e7157174e2ae0390adf7d93f33e9804dc9ac52e6) |
+
+The earlier Semuni batch on this page's sibling, [Two payer models](/payers/example),
+went the same way: anchor
+[`0xfd96eaf3…df1cbf`](https://sepolia.etherscan.io/tx/0xfd96eaf394b69a08fb6a0a080af3de3a034be57cc6cb66deb2b4222c89df1cbf),
+attestation
+[`0x49743077…83e5fd0`](https://creditcoin-testnet.blockscout.com/tx/0x49743077937e997117c5d690ac022c41ae11fb3b5216be21063433fa883e5fd0),
+statement
+[`0xb5f78f3d…902d4ab`](https://creditcoin-testnet.blockscout.com/tx/0xb5f78f3db90a4e700ce8e24054ececcf83f77978f80f682bc8f0c6aae902d4ab).
+
+Check an acceptance yourself, with one of that batch's public commitments:
+
+```bash
+cast call 0x47172643d148300d2649C475d68a5bD49267e60C \
+  "acceptedByPayer(bytes32,address)(bool)" \
+  0x4324ad13f3fb1babcce363dfa125d40841ae21c665488213a7b4f34f1f6b255d \
+  0x0531203274075Ff79A07000BBDa2B0272C647d01 \
+  --rpc-url https://rpc.cc3-testnet.creditcoin.network
+# true
+```
+
+The registry has processed more than sixty attestation transactions since it
+was deployed. The full list is on
+[Blockscout](https://creditcoin-testnet.blockscout.com/address/0x47172643d148300d2649C475d68a5bD49267e60C).
