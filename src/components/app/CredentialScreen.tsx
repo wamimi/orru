@@ -13,6 +13,7 @@ import { Button, ButtonLink } from "@/components/ui/Button";
 import { HiddenFields, SharedFields } from "@/components/ui/FieldDisclosure";
 import { parseOutcome, truncateAddress } from "@/lib/app";
 import { creditcoinTxUrl, truncateHex } from "@/lib/chain";
+import { formatWhen } from "@/lib/dates";
 import type { IncomeLookup } from "@/lib/income-types";
 import type { ProofBundle } from "@/lib/issue-types";
 import { prover, type PaymentSlip, type ProveProgress } from "@/lib/prove";
@@ -112,17 +113,6 @@ function issuedFrom(statement: Statement, storedTxHash: string | null): IssuedSt
     issuedAt: statement.issuedAt,
     remaining: statement.remaining,
   };
-}
-
-function formatDate(value: string | null): string {
-  if (!value) return "Date pending";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 function formatTokenAmount(value: string | null): string {
@@ -407,7 +397,7 @@ export function CredentialScreen() {
             title="Your statement is issued"
             body={
               issued.issuedAt
-                ? `Issued on ${formatDate(issued.issuedAt)}. Anyone can check ${aliasFromCredentialId(issued.id)} without an account.`
+                ? `Issued ${formatWhen(issued.issuedAt, "just now")}. Anyone can check ${aliasFromCredentialId(issued.id)} without an account.`
                 : `Anyone can check ${aliasFromCredentialId(issued.id)} without an account.`
             }
           >

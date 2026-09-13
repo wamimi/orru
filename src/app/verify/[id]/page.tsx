@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { Callout } from "@/components/app/Callout";
 import { ScreenFrame } from "@/components/app/ScreenFrame";
 import { PublicChrome } from "@/components/public/PublicChrome";
+import { LocalWhen } from "@/components/ui/LocalWhen";
 import { CopyableId } from "@/components/ui/CopyableId";
 import { aliasFromCredentialId, parseStatementRef } from "@/lib/alias";
 import { truncateHex } from "@/lib/chain";
@@ -34,17 +35,6 @@ function labelFromParam(id: string): string {
   } catch {
     return id;
   }
-}
-
-function formatDate(value: string | null): string {
-  if (!value) return "Not recorded";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 export default async function VerifyPage({
@@ -120,16 +110,16 @@ async function StatementResult({ id, fresh }: { id: string; fresh: boolean }) {
         </div>
         <div className="border-t border-rule py-4">
           <dt className="meta text-ink-faint">Issued</dt>
-          <dd className="mt-1 text-ink">{formatDate(credential.issuedAt)}</dd>
+          <dd className="mt-1 text-ink"><LocalWhen iso={credential.issuedAt} /></dd>
         </div>
         <div className="border-t border-rule py-4">
           <dt className="meta text-ink-faint">Newest payment through</dt>
-          <dd className="mt-1 text-ink">{formatDate(credential.evidenceEndDate)}</dd>
+          <dd className="mt-1 text-ink"><LocalWhen iso={credential.evidenceEndDate} /></dd>
         </div>
         {revoked ? (
           <div className="border-t border-rule py-4">
             <dt className="meta text-ink-faint">Withdrawn</dt>
-            <dd className="mt-1 text-ink">{formatDate(credential.revokedAt)}</dd>
+            <dd className="mt-1 text-ink"><LocalWhen iso={credential.revokedAt} /></dd>
           </div>
         ) : null}
       </dl>
