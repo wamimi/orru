@@ -10,6 +10,24 @@ attestation that this page describes end to end.
 
 > Etherscan finds it. Attestcoin proves it. Creditcoin never takes anyone's word.
 
+```mermaid
+flowchart TB
+  subgraph FIND["FIND: convenience, trusted for nothing"]
+    E["Etherscan / Alchemy discovery"] --> C["Candidate payments, grouped by payer and pay cycle"]
+  end
+  subgraph PROVE["PROVE: the only thing money depends on"]
+    A["Attestcoin: receipt is in attested Ethereum history"]
+    S["Receipt succeeded"]
+    T["Emitted by the trusted anchor contract"]
+    Y["Payer from topics[1], approved"]
+    M["Same commitment in the ZK proof's public inputs"]
+    H["Evidence height above the pool's floor"]
+    A --> S --> T --> Y --> M --> H
+  end
+  C -. "only suggests what to prove" .-> A
+  H --> D["Statement issued, credit drawn"]
+```
+
 ## The pieces
 
 | Piece | Value |
@@ -36,6 +54,34 @@ contains the payer's anchored commitment, so Attestcoin proves that the approved
 payer attested to the payment. It does not prove that a bank transfer settled.
 The statement records which payer the evidence came from, so a verifier can
 apply its own policy to each.
+
+```mermaid
+sequenceDiagram
+  participant Payer
+  participant Ethereum
+  participant Worker as Orru worker (usc-sdk)
+  participant Prover as Attestcoin proof builder
+  participant Registry as AttestationRegistry (Creditcoin)
+  participant Precompile as Native query verifier 0x…0FD2
+  participant Browser as Worker's browser (Noir)
+  participant Cred as CredentialRegistry
+  participant Pool as DemoCreditPool
+  Payer->>Ethereum: PaymentAnchored(payer, commitment) or an ERC-20 transfer
+  Worker->>Ethereum: scan for anchors (Etherscan, trusted for nothing)
+  Worker->>Prover: wait until attested height ≥ anchor block + 10
+  Prover-->>Worker: proof bundle for the transaction
+  Worker->>Registry: execute(proof bundle)
+  Registry->>Precompile: verify inclusion in attested history
+  Precompile-->>Registry: authenticated receipt
+  Registry->>Registry: succeeded? trusted anchor? payer from topics[1] approved?
+  Registry-->>Worker: CommitmentAccepted(commitment, payer, height)
+  Browser->>Browser: prove the band over the three commitments, amounts never leave
+  Browser->>Cred: issue(proof, public inputs, EIP-712 authorisation)
+  Cred->>Registry: acceptedByPayer(commitment, payer) for each of the three
+  Cred-->>Browser: statement id (band, payer, periods, evidence height)
+  Pool->>Cred: credentialOf(id) valid and fresh enough?
+  Pool-->>Browser: mUSDC disbursed
+```
 
 ## On-chain: the consumer contract
 

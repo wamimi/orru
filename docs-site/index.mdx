@@ -7,6 +7,32 @@ Orru turns payments you already receive into income you can prove to a lender,
 a landlord, or a platform, without revealing what you earn and without a bank,
 an employer letter, or a screenshot of your account.
 
+```mermaid
+flowchart LR
+  subgraph ETH["Ethereum"]
+    P1["Demo Payroll pays an ERC-20"]
+    P2["Semuni pays off-chain and anchors<br/>keccak(recipient, amount, period, salt)"]
+  end
+  subgraph ATT["Attestcoin"]
+    W["Orru worker (usc-sdk): proof bundle<br/>from the proof builder, submits execute"]
+    V["Native query verifier precompile 0x…0FD2<br/>proves the receipt is in attested Ethereum history"]
+  end
+  subgraph CC["Creditcoin"]
+    AR["AttestationRegistry<br/>source chain key · receipt succeeded · trusted anchor<br/>payer from topics[1] · payer approved<br/>records acceptedByPayer and the Ethereum height"]
+    CR["CredentialRegistry<br/>proof verifies AND every commitment acceptedByPayer<br/>statement: band, payer, periods, evidence height"]
+    POOL["DemoCreditPool<br/>lends against a valid statement,<br/>refuses evidence below its height floor"]
+  end
+  subgraph BR["Worker's browser"]
+    ZK["Noir proof: amounts, periods and salts stay private,<br/>proves one band and consecutive periods"]
+  end
+  P1 --> W
+  P2 --> W
+  W --> V --> AR --> CR
+  ZK --> CR
+  CR --> VER["Anyone verifies: public page, free API,<br/>or statusOf + credentialOf"]
+  CR --> POOL
+```
+
 ## How it works, in one paragraph
 
 Your payer records payment evidence on Ethereum. An on-chain payer records the

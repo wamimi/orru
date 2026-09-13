@@ -52,6 +52,24 @@ underwriting while keeping exact pay out of the issued credential.
 
 ## Verification, not trust
 
+```mermaid
+flowchart TB
+  subgraph FIND["FIND: convenience, trusted for nothing"]
+    E["Etherscan / Alchemy discovery"] --> C["Candidate payments, grouped by payer and pay cycle"]
+  end
+  subgraph PROVE["PROVE: the only thing money depends on"]
+    A["Attestcoin: receipt is in attested Ethereum history"]
+    S["Receipt succeeded"]
+    T["Emitted by the trusted anchor contract"]
+    Y["Payer from topics[1], approved"]
+    M["Same commitment in the ZK proof's public inputs"]
+    H["Evidence height above the pool's floor"]
+    A --> S --> T --> Y --> M --> H
+  end
+  C -. "only suggests what to prove" .-> A
+  H --> D["Statement issued, credit drawn"]
+```
+
 Orru separates discovery from verification:
 
 - **FIND** uses indexers and explorers to locate possible inbound payments. It is
@@ -73,14 +91,28 @@ Two security invariants define the protocol:
 
 ```mermaid
 flowchart LR
-    A[Stablecoin payment] --> B[Ethereum anchor]
-    B --> C[Attestcoin verification]
-    C --> D[Creditcoin attestation registry]
-    D --> E[Income proof]
-    E --> F[Credential registry]
-    F --> G[Band-only statement]
-    G --> H[Public verification]
-    G --> I[Fintech or lender]
+  subgraph ETH["Ethereum"]
+    P1["Demo Payroll pays an ERC-20"]
+    P2["Semuni pays off-chain and anchors<br/>keccak(recipient, amount, period, salt)"]
+  end
+  subgraph ATT["Attestcoin"]
+    W["Orru worker (usc-sdk): proof bundle<br/>from the proof builder, submits execute"]
+    V["Native query verifier precompile 0x…0FD2<br/>proves the receipt is in attested Ethereum history"]
+  end
+  subgraph CC["Creditcoin"]
+    AR["AttestationRegistry<br/>source chain key · receipt succeeded · trusted anchor<br/>payer from topics[1] · payer approved<br/>records acceptedByPayer and the Ethereum height"]
+    CR["CredentialRegistry<br/>proof verifies AND every commitment acceptedByPayer<br/>statement: band, payer, periods, evidence height"]
+    POOL["DemoCreditPool<br/>lends against a valid statement,<br/>refuses evidence below its height floor"]
+  end
+  subgraph BR["Worker's browser"]
+    ZK["Noir proof: amounts, periods and salts stay private,<br/>proves one band and consecutive periods"]
+  end
+  P1 --> W
+  P2 --> W
+  W --> V --> AR --> CR
+  ZK --> CR
+  CR --> VER["Anyone verifies: public page, free API,<br/>or statusOf + credentialOf"]
+  CR --> POOL
 ```
 
 1. A payer either sends an ERC-20 payment on Ethereum or anchors a commitment to
@@ -103,6 +135,34 @@ code pointers and transactions to open, is at
 [orru.mintlify.site/attestcoin](https://orru.mintlify.site/attestcoin).
 
 ### Attestcoin authenticates the Ethereum evidence
+
+```mermaid
+sequenceDiagram
+  participant Payer
+  participant Ethereum
+  participant Worker as Orru worker (usc-sdk)
+  participant Prover as Attestcoin proof builder
+  participant Registry as AttestationRegistry (Creditcoin)
+  participant Precompile as Native query verifier 0x…0FD2
+  participant Browser as Worker's browser (Noir)
+  participant Cred as CredentialRegistry
+  participant Pool as DemoCreditPool
+  Payer->>Ethereum: PaymentAnchored(payer, commitment) or an ERC-20 transfer
+  Worker->>Ethereum: scan for anchors (Etherscan, trusted for nothing)
+  Worker->>Prover: wait until attested height ≥ anchor block + 10
+  Prover-->>Worker: proof bundle for the transaction
+  Worker->>Registry: execute(proof bundle)
+  Registry->>Precompile: verify inclusion in attested history
+  Precompile-->>Registry: authenticated receipt
+  Registry->>Registry: succeeded? trusted anchor? payer from topics[1] approved?
+  Registry-->>Worker: CommitmentAccepted(commitment, payer, height)
+  Browser->>Browser: prove the band over the three commitments, amounts never leave
+  Browser->>Cred: issue(proof, public inputs, EIP-712 authorisation)
+  Cred->>Registry: acceptedByPayer(commitment, payer) for each of the three
+  Cred-->>Browser: statement id (band, payer, periods, evidence height)
+  Pool->>Cred: credentialOf(id) valid and fresh enough?
+  Pool-->>Browser: mUSDC disbursed
+```
 
 Attestcoin authenticates Ethereum transactions on Creditcoin. Our worker fetches
 a proof bundle for the source transaction from the Attestcoin prover service and
@@ -443,6 +503,9 @@ The full list is on [Blockscout](https://creditcoin-testnet.blockscout.com/addre
 | `0xe058c205…3b34` | Demo Payroll | 5 | `orru:cred:55c29575` | [`0x9c4bd8…3614d576`](https://creditcoin-testnet.blockscout.com/tx/0x9c4bd8179f88dd793c4933fc456df16b8647a837b8df73fb5daa63f53614d576) (block 5451868) |
 | `0xBb605cf7…E75A` | Semuni | 6 | `orru:cred:576b974c` | [`0xb5f78f…902d4ab`](https://creditcoin-testnet.blockscout.com/tx/0xb5f78f3db90a4e700ce8e24054ececcf83f77978f80f682bc8f0c6aae902d4ab) (block 5474351) |
 | `0x57409fb0…ab41` (demo faucet) | Semuni | 6 | `orru:cred:b9e81cf2` | [`0xe02242…8650c8`](https://creditcoin-testnet.blockscout.com/tx/0xe022428a9d2bab2322ff270d9d20cb4a398ae290da1ea11bfb5d7ac5568650c8) (block 5474877) |
+| `0x32fAB2d2…0368` (prepared judge wallet) | Demo Payroll | 6 | `orru:cred:68b8bdea` | [`0xfa6b39…2165ec`](https://creditcoin-testnet.blockscout.com/tx/0xfa6b39e4dc9480592fe8f20250ab1d7e72fc388c100be0ebb9ffbada982165ec) (block 5477330) |
+| `0x6667E40d…3F83` (demo faucet, the recorded demo) | Semuni | 6 | `orru:cred:92726207` | [`0xd23a57…056902`](https://creditcoin-testnet.blockscout.com/tx/0xd23a57c81b6b49825a3151f290554b8ab055252ff45d05a98f9965d3e4056902) (block 5481113) |
+| `0xf8380a5a…33eb` (demo faucet) | Semuni | 6 | `orru:cred:073968a6` | [`0x38440e…5d4bfc`](https://creditcoin-testnet.blockscout.com/tx/0x38440ef4805cf6539c280ed65b94360173a6eedd376fd635883e8a2a2d5d4bfc) (block 5481415) |
 
 Each one is readable at `https://orru.xyz/verify/<statement>` without an account,
 or with two calls to `CredentialRegistry` as described in the docs.
@@ -455,11 +518,40 @@ or with two calls to `CredentialRegistry` as described in the docs.
 | `0xe058c205…3b34` | 1,200 mUSDC | [`0xd7bf66…ddf5bc0`](https://creditcoin-testnet.blockscout.com/tx/0xd7bf66017e96c33090a4213bedba835e4647d6fb656ab5d118175cb43ddf5bc0) (block 5457474) |
 | `0xBb605cf7…E75A` | 900 mUSDC | [`0x997275…db439c1`](https://creditcoin-testnet.blockscout.com/tx/0x99727560c5f7032bf7fa017bc37209eb77874bc84e0aa2a75750a0db5db439c1) (block 5474358) |
 | `0x57409fb0…ab41` (demo faucet) | 450 mUSDC | [`0xd4237b…9ac52e6`](https://creditcoin-testnet.blockscout.com/tx/0xd4237bb4e5c045aab3532fa3e7157174e2ae0390adf7d93f33e9804dc9ac52e6) (block 5474900) |
+| `0x32fAB2d2…0368` (prepared judge wallet) | 900 mUSDC | [`0x0ee011…bbfc252`](https://creditcoin-testnet.blockscout.com/tx/0x0ee011c963591ccf79c94846ab4fb399a16822b4610e35492f92ab9cbbbfc252) (block 5477333) |
+| `0x6667E40d…3F83` (the recorded demo) | 900 mUSDC | [`0x714c66…26b4d3`](https://creditcoin-testnet.blockscout.com/tx/0x714c66e9c08b3539cc771b0f46215fe61d7b39c8a445accb33b40b93bd26b4d3) (block 5481136) |
+| `0xf8380a5a…33eb` (demo faucet) | 900 mUSDC | [`0xd9f120…21f734`](https://creditcoin-testnet.blockscout.com/tx/0xd9f12079cadbecac56d8c7a6d77c8198c6a5244cd0e3729464221f37bb21f734) (block 5481427) |
 
-The last two rows are the two paths walked end to end on 12 September 2026: an
-existing wallet, and a fresh wallet that started from the demo faucet.
+Twelve draws in total as of 13 September 2026, the rest being smaller follow-up
+draws by the same wallets; the full list is on the
+[pool's Blockscout page](https://creditcoin-testnet.blockscout.com/address/0x1B906254Ceca488c301E7063d437c8B18da10e9e).
 
 ## How this makes money
+
+```mermaid
+flowchart LR
+  O(("Orru"))
+  subgraph Workers["Workers paid in stablecoins"]
+    W1["Proof of income in minutes, free"]
+    W2["Range only, proof built on their device"]
+    W3["Borrow: no collateral, no liquidation"]
+  end
+  subgraph Lenders["Lenders, fintechs, neobanks"]
+    L1["Verify without PDFs, vendors or Orru:<br/>page, free API, two contract calls"]
+    L2["Underwriting as a service:<br/>a limit, per decision or subscription"]
+    L3["Embedded credit: get-paid-early,<br/>salary-stream advances"]
+  end
+  subgraph Payers["Payers and payout rails"]
+    P1["Anchor one hash per payment,<br/>any rail, any chain"]
+    P2["Workers can prove income anywhere:<br/>a retention feature"]
+    P3["No salary data leaves the payer"]
+  end
+  O --> Workers
+  O --> Lenders
+  O --> Payers
+  Lenders -- "pay for underwriting and embedded credit" --> O
+  Payers -- "pay for integration and distribution" --> O
+```
 
 Nobody pays to read a credential.
 
@@ -547,20 +639,22 @@ demo faucet is open to anyone and shows the complete protocol cadence.
 
 | Path | Wallet | Initial wait | What it demonstrates |
 |---|---|---|---|
-| **Prepared judge wallet** | The wallets and keys provided with the DoraHacks submission | None | Review, browser proof, statement issuance, public verification and borrowing |
+| **Prepared judge wallet** | One of the wallets provided in the pitch deck | None | Review, browser proof, statement issuance, public verification and borrowing |
 | **Demo faucet** | Use any fresh wallet you control | Usually 10 to 15 minutes | The complete flow, including Ethereum anchoring and Attestcoin confirmation |
 
 ### Fast judge path: prepared wallet
 
-The prepared wallets already have three Semuni pay cycles confirmed by
-Attestcoin. Their addresses and private keys are provided with the DoraHacks
-submission. They are testnet accounts holding nothing of value; if one has been
-used before you arrive, take the next one or use the demo faucet.
+The prepared wallets already have three Demo Payroll pay cycles confirmed by
+Attestcoin, so a statement can be issued the moment you connect. Their addresses
+and keys are in the pitch deck. They are testnet accounts holding nothing of
+value. If someone has already issued a statement on the one you pick, the app
+shows that statement and you can still borrow what remains; otherwise take
+another wallet, or use the demo faucet with a wallet of your own.
 
-1. Import the supplied testnet account into MetaMask or Rabby.
+1. Import one of the judge wallets into MetaMask or Rabby.
 2. Open [orru.xyz/connect](https://orru.xyz/connect), connect it and sign the
    short ownership message.
-3. Review the confirmed Semuni income history and issue the statement.
+3. Review the confirmed Demo Payroll income history and issue the statement.
 4. Borrow against the statement. The mUSDC arrives in the connected wallet.
 5. Open the public statement page in a private window. It needs no wallet or
    Orru account.
@@ -604,9 +698,6 @@ the Creditcoin network only; the same address on Sepolia is the payroll contract
 Token lists live in the wallet app, not in the account key, so an imported
 account starts without it.
 
-<!-- Judge wallets, if they must be listed here rather than in the submission:
-address and private key, one per line. Testnet only. -->
-
 The faucet spends real Sepolia gas from a server-side hot key. Its in-memory
 duplicate guard protects only one process, not every Vercel instance. Before
 long-lived public exposure, add a shared atomic rate limit, bot challenge and
@@ -639,6 +730,16 @@ payments. The verifier, nullifier registry and circuit are reused unchanged.
 
 **Payer SDK.** One package that anchors a commitment per payment and hands the
 worker their slip, so a payout rail integrates in an afternoon.
+
+**Institution-ready documents.** A PDF version of the statement that a visa
+office, a landlord or a bank compliance desk can accept on paper: the range, the
+payer, the dates and the statement id, with the public verification link printed
+on it and a plain-language glossary for reviewers who have never seen a
+blockchain. An optional identity check binds a named holder to the wallet for
+institutions that require one. Disclosure stays the user's choice: the range by
+default, individual periods or a full ledger only when they decide to show them.
+The document verifies against Creditcoin, so its authenticity never depends on
+us.
 
 ## Documentation
 
